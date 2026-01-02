@@ -13,21 +13,22 @@ sqlite = [
 postgres = [
     "infra/postgres",
     "tower-sessions-sqlx-store/postgres",
-    "k-core/postgres",
 ]
-broker-nats = ["infra/broker-nats"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
     "logging",
     "db-sqlx",
+    "sqlite",
+    "http",
+    "auth","sessions-db"
 ] }
 domain = { path = "../domain" }
 infra = { path = "../infra", default-features = false, features = [
     "sqlite",
 ] }
 
-# Web framework
+#Web framework
 axum = { version = "0.8.8", features = ["macros"] }
 tower = "0.5.2"
 tower-http = { version = "0.6.2", features = ["cors", "trace"] }
@@ -62,8 +63,6 @@ uuid = { version = "1.19.0", features = ["v4", "serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
-# Database
 dotenvy = "0.15.7"
+config = "0.15.19"
 
-# Configuration
-config = "0.15.9"

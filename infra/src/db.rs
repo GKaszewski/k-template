@@ -1,4 +1,4 @@
-pub use k_core::db::{DatabaseConfig, DatabasePool};
+pub use k_core::db::DatabasePool;
 
 pub async fn run_migrations(pool: &DatabasePool) -> Result<(), sqlx::Error> {
     match pool {

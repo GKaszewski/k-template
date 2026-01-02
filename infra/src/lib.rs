@@ -20,6 +20,6 @@ pub mod session_store;
 mod user_repository;
 
 // Re-export for convenience
-pub use db::{DatabaseConfig, run_migrations};
+pub use db::run_migrations;
 #[cfg(feature = "sqlite")]
 pub use user_repository::SqliteUserRepository;
