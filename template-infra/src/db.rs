@@ -2,17 +2,15 @@ pub use k_core::db::{DatabaseConfig, DatabasePool};
 
 pub async fn run_migrations(pool: &DatabasePool) -> Result<(), sqlx::Error> {
     match pool {
+        #[cfg(feature = "sqlite")]
         DatabasePool::Sqlite(pool) => {
+            // Point specifically to the sqlite folder
             sqlx::migrate!("../migrations_sqlite").run(pool).await?;
         }
         #[cfg(feature = "postgres")]
-        DatabasePool::Postgres(_) => {
-            // Postgres migrations would go here
-            tracing::warn!("Postgres migrations not implemented in template yet");
-            // Pass through the types from the core library
-            // This allows you to change k-core later without breaking imports in template-infra
-            // The `pub use` statement cannot be placed inside a match arm.
-            // It is already present at the top of the file.
+        DatabasePool::Postgres(pool) => {
+            // Point specifically to the postgres folder
+            sqlx::migrate!("../migrations_postgres").run(pool).await?;
         }
     }
     Ok(())
