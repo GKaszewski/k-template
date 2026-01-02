@@ -33,6 +33,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a23eb6b1614318a8071c9b2521f36b424b2c83db5eb3a0fead4a6c0809af6e61"
 
 [[package]]
+name = "api"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "axum-login",
+ "chrono",
+ "config",
+ "domain",
+ "dotenvy",
+ "infra",
+ "k-core",
+ "password-auth",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tower-sessions",
+ "tower-sessions-sqlx-store",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "validator",
+]
+
+[[package]]
 name = "argon2"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -556,6 +587,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "442039f5147480ba31067cb00ada1adae6892028e40e45fc5de7b7df6dcc1b5f"
 dependencies = [
  "const-random",
+]
+
+[[package]]
+name = "domain"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "futures-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -1123,6 +1170,28 @@ checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
+]
+
+[[package]]
+name = "infra"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "async-trait",
+ "chrono",
+ "domain",
+ "futures-core",
+ "futures-util",
+ "k-core",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tower-sessions",
+ "tower-sessions-sqlx-store",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -2399,75 +2468,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "template-api"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "axum-login",
- "chrono",
- "config",
- "dotenvy",
- "k-core",
- "password-auth",
- "serde",
- "serde_json",
- "sqlx",
- "template-domain",
- "template-infra",
- "thiserror 2.0.17",
- "time",
- "tokio",
- "tower",
- "tower-http",
- "tower-sessions",
- "tower-sessions-sqlx-store",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "validator",
-]
-
-[[package]]
-name = "template-domain"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "futures-core",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "template-infra"
-version = "0.1.0"
-dependencies = [
- "async-nats",
- "async-trait",
- "chrono",
- "futures-core",
- "futures-util",
- "k-core",
- "serde",
- "serde_json",
- "sqlx",
- "template-domain",
- "thiserror 2.0.17",
- "tokio",
- "tower-sessions",
- "tower-sessions-sqlx-store",
- "tracing",
- "uuid",
 ]
 
 [[package]]

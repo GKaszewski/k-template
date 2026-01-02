@@ -4,7 +4,7 @@ WORKDIR /app
 COPY . .
 
 # Build the release binary
-RUN cargo build --release -p template-api
+RUN cargo build --release -p api
 
 FROM debian:bookworm-slim
 
@@ -13,7 +13,7 @@ WORKDIR /app
 # Install OpenSSL (required for many Rust networking crates) and CA certificates
 RUN apt-get update && apt-get install -y libssl3 ca-certificates && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/release/template-api .
+COPY --from=builder /app/target/release/api .
 
 
 # Create data directory for SQLite
@@ -24,4 +24,4 @@ ENV SESSION_SECRET=supersecretchangeinproduction
 
 EXPOSE 3000
 
-CMD ["./template-api"]
+CMD ["./api"]

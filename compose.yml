@@ -1,0 +1,50 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # In production, use a secure secret
+      - SESSION_SECRET=dev_secret_key_12345
+      - DATABASE_URL=sqlite:///app/data/notes.db
+      - CORS_ALLOWED_ORIGINS=http://localhost:8080,http://localhost:5173
+      - HOST=0.0.0.0
+      - PORT=3000
+    volumes:
+      - ./data:/app/data
+
+  worker:
+    build: .
+    command: ["./notes-worker"]
+    environment:
+      - DATABASE_URL=sqlite:///app/data/notes.db
+      - BROKER_URL=nats://nats:4222
+      - QDRANT_URL=http://qdrant:6334
+      - EMBEDDING_PROVIDER=fastembed
+    depends_on:
+      - backend
+      - nats
+      - qdrant
+    volumes:
+      - ./data:/app/data
+
+  nats:
+    image: nats:alpine
+    ports:
+      - "4222:4222"
+      - "6222:6222"
+      - "8222:8222"
+    restart: unless-stopped
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: k_template_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:

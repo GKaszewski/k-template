@@ -1,5 +1,5 @@
 [package]
-name = "template-infra"
+name = "infra"
 version = "0.1.0"
 edition = "2024"
 
@@ -17,7 +17,7 @@ broker-nats = ["dep:async-nats", "dep:futures-util"]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
     "db-sqlx",
 ] }
-template-domain = { path = "../template-domain" }
+domain = { path = "../domain" }
 async-trait = "0.1.89"
 chrono = { version = "0.4.42", features = ["serde"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "chrono", "migrate"] }

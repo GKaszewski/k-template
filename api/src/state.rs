@@ -6,7 +6,7 @@ use axum::extract::FromRef;
 use std::sync::Arc;
 
 use crate::config::Config;
-use template_domain::UserService;
+use domain::UserService;
 
 #[derive(Clone)]
 pub struct AppState {

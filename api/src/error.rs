@@ -3,14 +3,14 @@
 //! Maps domain errors to HTTP responses
 
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 use thiserror::Error;
 
-use template_domain::DomainError;
+use domain::DomainError;
 
 /// API-level errors
 #[derive(Debug, Error)]

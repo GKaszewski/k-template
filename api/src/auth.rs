@@ -3,14 +3,14 @@
 use std::sync::Arc;
 
 use axum_login::{AuthnBackend, UserId};
+use infra::session_store::InfraSessionStore;
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use template_infra::session_store::InfraSessionStore;
 use tower_sessions::SessionManagerLayer;
+use uuid::Uuid;
 
 use crate::error::ApiError;
-use template_domain::{User, UserRepository};
+use domain::{User, UserRepository};
 
 /// Wrapper around domain User to implement AuthUser
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -95,7 +95,7 @@ pub async fn setup_auth_layer(
     user_repo: Arc<dyn UserRepository>,
 ) -> Result<axum_login::AuthManagerLayer<AuthBackend, InfraSessionStore>, ApiError> {
     let backend = AuthBackend::new(user_repo);
-    
+
     let auth_layer = axum_login::AuthManagerLayerBuilder::new(backend, session_layer).build();
     Ok(auth_layer)
 }

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{FromRow, SqlitePool};
 use uuid::Uuid;
 
-use template_domain::{DomainError, DomainResult, Email, User, UserRepository};
+use domain::{DomainError, DomainResult, Email, User, UserRepository};
 
 /// SQLite adapter for UserRepository
 #[cfg(feature = "sqlite")]
@@ -145,7 +145,7 @@ mod tests {
     use k_core::db::connect; // Import k_core::db::connect
 
     async fn setup_test_db() -> SqlitePool {
-        let config = DatabaseConfig::in_memory();
+        let config = DatabaseConfig::default();
         // connect returns DatabasePool directly now
         let db_pool = connect(&config).await.expect("Failed to create pool");
         run_migrations(&db_pool).await.unwrap();

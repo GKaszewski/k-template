@@ -1,10 +1,10 @@
 use std::net::SocketAddr;
 use std::time::Duration as StdDuration;
 
+use domain::UserService;
+use infra::factory::build_session_store;
+use infra::factory::build_user_repository;
 use k_core::logging;
-use template_domain::UserService;
-use template_infra::factory::build_session_store;
-use template_infra::factory::build_user_repository;
 use tokio::net::TcpListener;
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::info;
@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
     let db_pool = k_core::db::connect(&db_config).await?;
 
     // 4. Run migrations (using the re-export if you kept it, or direct k_core)
-    template_infra::db::run_migrations(&db_pool).await?;
+    infra::db::run_migrations(&db_pool).await?;
 
     // 5. Initialize Services
     let user_repo = build_user_repository(&db_pool).await?;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 #[cfg(feature = "sqlite")]
 use crate::SqliteUserRepository;
 use crate::db::DatabasePool;
-use template_domain::UserRepository;
+use domain::UserRepository;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FactoryError {
@@ -12,7 +12,7 @@ pub enum FactoryError {
     #[error("Not implemented: {0}")]
     NotImplemented(String),
     #[error("Infrastructure error: {0}")]
-    Infrastructure(#[from] template_domain::DomainError),
+    Infrastructure(#[from] domain::DomainError),
 }
 
 pub type FactoryResult<T> = Result<T, FactoryError>;

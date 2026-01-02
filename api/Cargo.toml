@@ -1,31 +1,31 @@
 [package]
-name = "template-api"
+name = "api"
 version = "0.1.0"
 edition = "2024"
-default-run = "template-api"
+default-run = "api"
 
 [features]
 default = ["sqlite"]
 sqlite = [
-    "template-infra/sqlite",
+    "infra/sqlite",
     "tower-sessions-sqlx-store/sqlite",
     "sqlx/sqlite",
 ]
 postgres = [
-    "template-infra/postgres",
+    "infra/postgres",
     "tower-sessions-sqlx-store/postgres",
     "sqlx/postgres",
     "k-core/postgres",
 ]
-broker-nats = ["template-infra/broker-nats"]
+broker-nats = ["infra/broker-nats"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
     "logging",
     "db-sqlx",
 ] }
-template-domain = { path = "../template-domain" }
-template-infra = { path = "../template-infra", default-features = false, features = [
+domain = { path = "../domain" }
+infra = { path = "../infra", default-features = false, features = [
     "sqlite",
 ] }
 
