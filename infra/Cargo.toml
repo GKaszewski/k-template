@@ -5,19 +5,18 @@ edition = "2024"
 
 [features]
 default = ["sqlite", "broker-nats"]
-sqlite = ["sqlx/sqlite", "tower-sessions-sqlx-store/sqlite"]
-postgres = [
-    "sqlx/postgres",
-    "tower-sessions-sqlx-store/postgres",
-    "k-core/postgres",
-]
-broker-nats = ["dep:async-nats", "dep:futures-util"]
+sqlite = ["sqlx/sqlite", "k-core/sqlite", "tower-sessions-sqlx-store", "k-core/sessions-db"]
+postgres = ["sqlx/postgres", "k-core/postgres", "tower-sessions-sqlx-store", "k-core/sessions-db"]
+broker-nats = ["dep:futures-util", "k-core/broker-nats"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
+   "logging",
     "db-sqlx",
+    "sessions-db"
 ] }
 domain = { path = "../domain" }
+
 async-trait = "0.1.89"
 chrono = { version = "0.4.42", features = ["serde"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "chrono", "migrate"] }
@@ -25,8 +24,7 @@ thiserror = "2.0.17"
 tokio = { version = "1.48.0", features = ["full"] }
 tracing = "0.1"
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
-tower-sessions = "0.14.0"
-tower-sessions-sqlx-store = { version = "0.15.0", default-features = false }
+tower-sessions-sqlx-store = { version =  "0.15.0", optional = true}
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 async-nats = { version = "0.45", optional = true }

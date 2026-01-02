@@ -1187,7 +1187,6 @@ dependencies = [
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
- "tower-sessions",
  "tower-sessions-sqlx-store",
  "tracing",
  "uuid",
@@ -1226,9 +1225,12 @@ version = "0.1.10"
 source = "git+https://git.gabrielkaszewski.dev/GKaszewski/k-core#7a72f5f54ad45ba82f451e90c44c0581d13194d9"
 dependencies = [
  "anyhow",
+ "async-nats",
  "async-trait",
  "axum",
  "chrono",
+ "futures-core",
+ "futures-util",
  "serde",
  "sqlx",
  "thiserror 2.0.17",
