@@ -9,9 +9,6 @@ database = { type = "string", prompt = "Database type", choices = [
     "postgres",
 ], default = "sqlite" }
 
-[hooks]
-post = ["migrations.rhai"]
-
 [conditional]
 # Conditional dependencies based on database choice
 sqlite = { condition = "database == 'sqlite'", ignore = [
