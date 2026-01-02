@@ -9,12 +9,10 @@ default = ["sqlite"]
 sqlite = [
     "infra/sqlite",
     "tower-sessions-sqlx-store/sqlite",
-    "sqlx/sqlite",
 ]
 postgres = [
     "infra/postgres",
     "tower-sessions-sqlx-store/postgres",
-    "sqlx/postgres",
     "k-core/postgres",
 ]
 broker-nats = ["infra/broker-nats"]
@@ -65,7 +63,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 # Database
-sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"] }
 dotenvy = "0.15.7"
 
 # Configuration
