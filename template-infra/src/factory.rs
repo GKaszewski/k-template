@@ -1,0 +1,52 @@
+use std::sync::Arc;
+
+use crate::db::DatabasePool;
+#[cfg(feature = "sqlite")]
+use crate::SqliteUserRepository;
+use template_domain::UserRepository;
+
+#[derive(Debug, thiserror::Error)]
+pub enum FactoryError {
+    #[error("Database error: {0}")]
+    Database(#[from] sqlx::Error),
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
+    #[error("Infrastructure error: {0}")]
+    Infrastructure(#[from] template_domain::DomainError),
+}
+
+pub type FactoryResult<T> = Result<T, FactoryError>;
+
+pub async fn build_user_repository(pool: &DatabasePool) -> FactoryResult<Arc<dyn UserRepository>> {
+    match pool {
+        #[cfg(feature = "sqlite")]
+        DatabasePool::Sqlite(pool) => Ok(Arc::new(SqliteUserRepository::new(pool.clone()))),
+        #[cfg(feature = "postgres")]
+        DatabasePool::Postgres(pool) => Ok(Arc::new(crate::user_repository::PostgresUserRepository::new(pool.clone()))),
+        #[allow(unreachable_patterns)]
+        _ => Err(FactoryError::NotImplemented(
+            "No database feature enabled".to_string(),
+        )),
+    }
+}
+
+pub async fn build_session_store(
+    pool: &DatabasePool,
+) -> FactoryResult<crate::session_store::InfraSessionStore> {
+    match pool {
+        #[cfg(feature = "sqlite")]
+        DatabasePool::Sqlite(pool) => {
+            let store = tower_sessions_sqlx_store::SqliteStore::new(pool.clone());
+            Ok(crate::session_store::InfraSessionStore::Sqlite(store))
+        }
+        #[cfg(feature = "postgres")]
+        DatabasePool::Postgres(pool) => {
+            let store = tower_sessions_sqlx_store::PostgresStore::new(pool.clone());
+            Ok(crate::session_store::InfraSessionStore::Postgres(store))
+        }
+        #[allow(unreachable_patterns)]
+        _ => Err(FactoryError::NotImplemented(
+            "No database feature enabled".to_string(),
+        )),
+    }
+}

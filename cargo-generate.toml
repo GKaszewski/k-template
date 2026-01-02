@@ -1,0 +1,12 @@
+[template]
+cargo_generate_version = ">=0.21.0"
+ignore = [".git", "target", ".idea", ".vscode"]
+
+[placeholders]
+project_name = { type = "string", prompt = "Project name" }
+database = { type = "string", prompt = "Database type", choices = ["sqlite", "postgres"], default = "sqlite" }
+
+[conditional]
+# Conditional dependencies based on database choice
+sqlite = { condition = "database == 'sqlite'", ignore = ["template-infra/src/user_repository_postgres.rs"] }
+postgres = { condition = "database == 'postgres'", ignore = ["template-infra/src/user_repository_sqlite.rs"] }

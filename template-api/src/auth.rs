@@ -1,0 +1,101 @@
+//! Authentication logic using axum-login
+
+use std::sync::Arc;
+
+use axum_login::{AuthnBackend, UserId};
+use password_auth::verify_password;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use template_infra::session_store::InfraSessionStore;
+use tower_sessions::SessionManagerLayer;
+
+use crate::error::ApiError;
+use template_domain::{User, UserRepository};
+
+/// Wrapper around domain User to implement AuthUser
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuthUser(pub User);
+
+impl axum_login::AuthUser for AuthUser {
+    type Id = Uuid;
+
+    fn id(&self) -> Self::Id {
+        self.0.id
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        // Use password hash to invalidate sessions if password changes
+        self.0
+            .password_hash
+            .as_ref()
+            .map(|s| s.as_bytes())
+            .unwrap_or(&[])
+    }
+}
+
+#[derive(Clone)]
+pub struct AuthBackend {
+    pub user_repo: Arc<dyn UserRepository>,
+}
+
+impl AuthBackend {
+    pub fn new(user_repo: Arc<dyn UserRepository>) -> Self {
+        Self { user_repo }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct Credentials {
+    pub email: String,
+    pub password: String,
+}
+
+impl AuthnBackend for AuthBackend {
+    type User = AuthUser;
+    type Credentials = Credentials;
+    type Error = ApiError;
+
+    async fn authenticate(
+        &self,
+        creds: Self::Credentials,
+    ) -> Result<Option<Self::User>, Self::Error> {
+        let user = self
+            .user_repo
+            .find_by_email(&creds.email)
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+
+        if let Some(user) = user {
+            if let Some(hash) = &user.password_hash {
+                // Verify password
+                if verify_password(&creds.password, hash).is_ok() {
+                    return Ok(Some(AuthUser(user)));
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    async fn get_user(&self, user_id: &UserId<Self>) -> Result<Option<Self::User>, Self::Error> {
+        let user = self
+            .user_repo
+            .find_by_id(*user_id)
+            .await
+            .map_err(|e| ApiError::internal(e.to_string()))?;
+
+        Ok(user.map(AuthUser))
+    }
+}
+
+pub type AuthSession = axum_login::AuthSession<AuthBackend>;
+
+pub async fn setup_auth_layer(
+    session_layer: SessionManagerLayer<InfraSessionStore>,
+    user_repo: Arc<dyn UserRepository>,
+) -> Result<axum_login::AuthManagerLayer<AuthBackend, InfraSessionStore>, ApiError> {
+    let backend = AuthBackend::new(user_repo);
+    
+    let auth_layer = axum_login::AuthManagerLayerBuilder::new(backend, session_layer).build();
+    Ok(auth_layer)
+}

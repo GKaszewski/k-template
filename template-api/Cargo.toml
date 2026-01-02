@@ -1,0 +1,72 @@
+[package]
+name = "template-api"
+version = "0.1.0"
+edition = "2024"
+default-run = "template-api"
+
+[features]
+default = ["sqlite", "smart-features"]
+sqlite = [
+    "template-infra/sqlite",
+    "tower-sessions-sqlx-store/sqlite",
+    "sqlx/sqlite",
+]
+postgres = [
+    "template-infra/postgres",
+    "tower-sessions-sqlx-store/postgres",
+    "sqlx/postgres",
+    "k-core/postgres",
+]
+smart-features = ["template-infra/smart-features", "template-infra/broker-nats"]
+
+[dependencies]
+k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
+    "logging",
+    "db-sqlx",
+] }
+template-domain = { path = "../template-domain" }
+template-infra = { path = "../template-infra", default-features = false, features = [
+    "sqlite",
+] }
+
+# Web framework
+axum = { version = "0.8.8", features = ["macros"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.2", features = ["cors", "trace"] }
+
+# Authentication
+axum-login = "0.18"
+tower-sessions = "0.14"
+tower-sessions-sqlx-store = { version = "0.15", features = ["sqlite"] }
+password-auth = "1.0"
+time = "0.3"
+async-trait = "0.1.89"
+
+# Async runtime
+tokio = { version = "1.48.0", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0"
+
+# Validation
+validator = { version = "0.20", features = ["derive"] }
+
+# Error handling
+thiserror = "2.0.17"
+anyhow = "1.0"
+
+# Utilities
+chrono = { version = "0.4.42", features = ["serde"] }
+uuid = { version = "1.19.0", features = ["v4", "serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+
+# Database
+sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio"] }
+dotenvy = "0.15.7"
+
+# Configuration
+config = "0.15.9"
