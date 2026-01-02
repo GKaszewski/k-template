@@ -4,14 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = ["sqlite", "smart-features", "broker-nats"]
+default = ["sqlite", "broker-nats"]
 sqlite = ["sqlx/sqlite", "tower-sessions-sqlx-store/sqlite"]
 postgres = [
     "sqlx/postgres",
     "tower-sessions-sqlx-store/postgres",
     "k-core/postgres",
 ]
-smart-features = ["dep:fastembed", "dep:qdrant-client"]
 broker-nats = ["dep:async-nats", "dep:futures-util"]
 
 [dependencies]
@@ -28,8 +27,6 @@ tracing = "0.1"
 uuid = { version = "1.19.0", features = ["v4", "serde"] }
 tower-sessions = "0.14.0"
 tower-sessions-sqlx-store = { version = "0.15.0", default-features = false }
-fastembed = { version = "5.4", optional = true }
-qdrant-client = { version = "1.16", optional = true }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 async-nats = { version = "0.45", optional = true }

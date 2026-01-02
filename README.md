@@ -66,7 +66,7 @@ This template uses Cargo features to control compilation of infrastructure adapt
 | `sqlite` | Enables SQLite repository implementations and dependencies | `template-infra`, `template-api` |
 | `postgres` | Enables PostgreSQL repository implementations and dependencies | `template-infra`, `template-api` |
 | `broker-nats`| Enables NATS messaging support | `template-infra` |
-| `smart-features` | Enables AI/Vector DB capabilities (Qdrant, FastEmbed) | `template-infra` |
+
 
 ### Switching Databases
 

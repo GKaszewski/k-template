@@ -5,7 +5,7 @@ edition = "2024"
 default-run = "template-api"
 
 [features]
-default = ["sqlite", "smart-features"]
+default = ["sqlite"]
 sqlite = [
     "template-infra/sqlite",
     "tower-sessions-sqlx-store/sqlite",
@@ -17,7 +17,7 @@ postgres = [
     "sqlx/postgres",
     "k-core/postgres",
 ]
-smart-features = ["template-infra/smart-features", "template-infra/broker-nats"]
+broker-nats = ["template-infra/broker-nats"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
