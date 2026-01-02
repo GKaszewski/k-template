@@ -6,12 +6,12 @@ use domain::UserService;
 use infra::factory::build_session_store;
 use infra::factory::build_user_repository;
 use infra::run_migrations;
+use infra::session_store::{Expiry, SessionManagerLayer};
 use k_core::http::server::ServerConfig;
 use k_core::http::server::apply_standard_middleware;
 use k_core::logging;
 use time::Duration;
 use tokio::net::TcpListener;
-use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::info;
 
 mod auth;
@@ -37,8 +37,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Connecting to database: {}", config.database_url);
     let db_config = k_core::db::DatabaseConfig {
         url: config.database_url.clone(),
-        max_connections: 5,
-        min_connections: 1,
+        max_connections: config.db_max_connections,
+        min_connections: config.db_min_connections,
         acquire_timeout: StdDuration::from_secs(30),
     };
 
@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(e))?;
 
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_secure(false) // Set to true in prod
+        .with_secure(config.secure_cookie)
         .with_expiry(Expiry::OnInactivity(Duration::days(7)));
 
     let auth_layer = setup_auth_layer(session_layer, user_repo).await?;

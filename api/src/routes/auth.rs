@@ -31,10 +31,10 @@ async fn login(
             password: payload.password,
         })
         .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?
     {
-        Ok(Some(user)) => user,
-        Ok(None) => return Err(ApiError::Validation("Invalid credentials".to_string())),
-        Err(_) => return Err(ApiError::Internal("Authentication failed".to_string())),
+        Some(user) => user,
+        None => return Err(ApiError::Validation("Invalid credentials".to_string())),
     };
 
     auth_session

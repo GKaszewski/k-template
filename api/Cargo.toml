@@ -5,15 +5,10 @@ edition = "2024"
 default-run = "api"
 
 [features]
-default = ["sqlite"]
-sqlite = [
-    "infra/sqlite",
-    "tower-sessions-sqlx-store/sqlite",
-]
-postgres = [
-    "infra/postgres",
-    "tower-sessions-sqlx-store/postgres",
-]
+default = ["sqlite", "auth-axum-login"]
+sqlite = ["infra/sqlite", "tower-sessions-sqlx-store/sqlite"]
+postgres = ["infra/postgres", "tower-sessions-sqlx-store/postgres"]
+auth-axum-login = ["infra/auth-axum-login"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
@@ -21,12 +16,11 @@ k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features 
     "db-sqlx",
     "sqlite",
     "http",
-    "auth","sessions-db"
+    "auth",
+    "sessions-db",
 ] }
 domain = { path = "../domain" }
-infra = { path = "../infra", default-features = false, features = [
-    "sqlite",
-] }
+infra = { path = "../infra", default-features = false, features = ["sqlite"] }
 
 #Web framework
 axum = { version = "0.8.8", features = ["macros"] }
@@ -34,10 +28,9 @@ tower = "0.5.2"
 tower-http = { version = "0.6.2", features = ["cors", "trace"] }
 
 # Authentication
-axum-login = "0.18"
-tower-sessions = "0.14"
+# Moved to infra
 tower-sessions-sqlx-store = { version = "0.15", features = ["sqlite"] }
-password-auth = "1.0"
+# password-auth removed
 time = "0.3"
 async-trait = "0.1.89"
 
@@ -65,4 +58,3 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 dotenvy = "0.15.7"
 config = "0.15.19"
-

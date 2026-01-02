@@ -14,6 +14,7 @@
 //! - [`db::create_pool`] - Create a database connection pool
 //! - [`db::run_migrations`] - Run database migrations
 
+pub mod auth;
 pub mod db;
 pub mod factory;
 pub mod session_store;

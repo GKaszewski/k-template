@@ -17,6 +17,27 @@ pub struct Config {
 
     #[serde(default = "default_host")]
     pub host: String,
+
+    #[serde(default = "default_secure_cookie")]
+    pub secure_cookie: bool,
+
+    #[serde(default = "default_db_max_connections")]
+    pub db_max_connections: u32,
+
+    #[serde(default = "default_db_min_connections")]
+    pub db_min_connections: u32,
+}
+
+fn default_secure_cookie() -> bool {
+    false
+}
+
+fn default_db_max_connections() -> u32 {
+    5
+}
+
+fn default_db_min_connections() -> u32 {
+    1
 }
 
 fn default_port() -> u16 {
@@ -62,12 +83,30 @@ impl Config {
             .filter(|s| !s.is_empty())
             .collect();
 
+        let secure_cookie = env::var("SECURE_COOKIE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(false);
+
+        let db_max_connections = env::var("DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(5);
+
+        let db_min_connections = env::var("DB_MIN_CONNECTIONS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(1);
+
         Self {
             host,
             port,
             database_url,
             session_secret,
             cors_allowed_origins,
+            secure_cookie,
+            db_max_connections,
+            db_min_connections,
         }
     }
 }
