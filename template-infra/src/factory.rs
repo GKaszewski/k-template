@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::db::DatabasePool;
 #[cfg(feature = "sqlite")]
 use crate::SqliteUserRepository;
+use crate::db::DatabasePool;
 use template_domain::UserRepository;
 
 #[derive(Debug, thiserror::Error)]
@@ -22,7 +22,9 @@ pub async fn build_user_repository(pool: &DatabasePool) -> FactoryResult<Arc<dyn
         #[cfg(feature = "sqlite")]
         DatabasePool::Sqlite(pool) => Ok(Arc::new(SqliteUserRepository::new(pool.clone()))),
         #[cfg(feature = "postgres")]
-        DatabasePool::Postgres(pool) => Ok(Arc::new(crate::user_repository::PostgresUserRepository::new(pool.clone()))),
+        DatabasePool::Postgres(pool) => Ok(Arc::new(
+            crate::user_repository::PostgresUserRepository::new(pool.clone()),
+        )),
         #[allow(unreachable_patterns)]
         _ => Err(FactoryError::NotImplemented(
             "No database feature enabled".to_string(),

@@ -1154,8 +1154,8 @@ dependencies = [
 
 [[package]]
 name = "k-core"
-version = "0.1.0"
-source = "git+https://git.gabrielkaszewski.dev/GKaszewski/k-core#0057613308e43d9ffe47105ba29a6baaf21c9787"
+version = "0.1.1"
+source = "git+https://git.gabrielkaszewski.dev/GKaszewski/k-core#bda288362ade1cd3508bbc985a0aebd7714d9a18"
 dependencies = [
  "anyhow",
  "chrono",
