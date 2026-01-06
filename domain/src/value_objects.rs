@@ -174,25 +174,25 @@ impl<'de> Deserialize<'de> for Password {
 // ============================================================================
 
 /// OIDC Issuer URL - validated URL for the identity provider
+///
+/// Stores the original string to preserve exact formatting (e.g., trailing slashes)
+/// since OIDC providers expect issuer URLs to match exactly.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct IssuerUrl(Url);
+pub struct IssuerUrl(String);
 
 impl IssuerUrl {
     pub fn new(value: impl AsRef<str>) -> Result<Self, ValidationError> {
-        let value = value.as_ref().trim();
-        let url = Url::parse(value).map_err(|e| ValidationError::InvalidUrl(e.to_string()))?;
-        Ok(Self(url))
-    }
-
-    pub fn as_url(&self) -> &Url {
-        &self.0
+        let value = value.as_ref().trim().to_string();
+        // Validate URL format but store original string to preserve exact formatting
+        Url::parse(&value).map_err(|e| ValidationError::InvalidUrl(e.to_string()))?;
+        Ok(Self(value))
     }
 }
 
 impl AsRef<str> for IssuerUrl {
     fn as_ref(&self) -> &str {
-        self.0.as_str()
+        &self.0
     }
 }
 
@@ -211,7 +211,7 @@ impl TryFrom<String> for IssuerUrl {
 
 impl From<IssuerUrl> for String {
     fn from(val: IssuerUrl) -> Self {
-        val.0.to_string()
+        val.0
     }
 }
 
