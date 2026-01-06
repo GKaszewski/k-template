@@ -1,100 +1,164 @@
 # k-template
 
-A production-ready, modular Rust template for K-Suite applications, following Hexagonal Architecture principles.
+A production-ready, modular Rust API template for K-Suite applications, following Hexagonal Architecture principles.
 
 ## Features
 
-- **Hexagonal Architecture**: Clear separation of concerns between Domain, Infrastructure, and API layers.
-- **Modular & Swappable**: Vendor implementations (databases, message brokers) are behind feature flags and trait objects.
-- **Feature-Gated Dependencies**: Compile only what you need. Unused dependencies are not included in the build.
-- **Cargo Generate Ready**: Pre-configured for `cargo-generate` to easily scaffold new services.
-- **Testable**: Domain logic is pure and easily testable; Infrastructure is tested with integration tests.
+- **Hexagonal Architecture**: Clear separation between Domain, Infrastructure, and API layers
+- **Multiple Auth Modes**: Session-based, JWT, or both - fully configurable
+- **OIDC Integration**: Connect to any OpenID Connect provider (Keycloak, Auth0, Zitadel, etc.)
+- **Database Flexibility**: SQLite (default) or PostgreSQL via feature flags
+- **Type-Safe Configuration**: Newtypes with built-in validation for all security-sensitive values
+- **Cargo Generate Ready**: Pre-configured for scaffolding new services
+
+## Quick Start
+
+### 1. Clone and Configure
+
+```bash
+git clone https://github.com/GKaszewski/k-template.git my-api
+cd my-api
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+### 2. Run
+
+```bash
+# Development (with hot reload via cargo-watch)
+cargo watch -x run
+
+# Or simply
+cargo run
+```
+
+The API will be available at `http://localhost:3000/api/v1/`.
+
+## Configuration
+
+All configuration is done via environment variables. See [.env.example](.env.example) for all options.
+
+### Authentication Modes
+
+Set `AUTH_MODE` to one of:
+
+| Mode | Description | Required Features |
+|------|-------------|-------------------|
+| `session` | Cookie-based sessions | `auth-axum-login` |
+| `jwt` | Bearer token authentication | `auth-jwt` |
+| `both` | Try JWT first, fall back to session | `auth-axum-login`, `auth-jwt` |
+
+### OIDC Integration
+
+To enable OIDC login (e.g., "Login with Google"):
+
+1. Enable the `auth-oidc` feature (enabled by default)
+2. Configure your OIDC provider in `.env`:
+   ```env
+   OIDC_ISSUER=https://your-provider.com
+   OIDC_CLIENT_ID=your-client-id
+   OIDC_CLIENT_SECRET=your-secret
+   OIDC_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback
+   ```
+3. Users can login via `GET /api/v1/auth/login/oidc`
+
+## Feature Flags
+
+Features are configured in `api/Cargo.toml`:
+
+```toml
+[features]
+default = ["sqlite", "auth-axum-login", "auth-oidc", "auth-jwt"]
+```
+
+| Feature | Description |
+|---------|-------------|
+| `sqlite` | SQLite database support (default) |
+| `postgres` | PostgreSQL database support |
+| `auth-axum-login` | Session-based authentication |
+| `auth-oidc` | OpenID Connect integration |
+| `auth-jwt` | JWT token authentication |
+| `auth-full` | All auth features combined |
+
+### Common Configurations
+
+**JWT-only API (stateless)**:
+```toml
+default = ["sqlite", "auth-jwt"]
+```
+
+**OIDC + JWT (typical SPA backend)**:
+```toml
+default = ["sqlite", "auth-oidc", "auth-jwt"]
+```
+
+**Full-featured (all auth methods)**:
+```toml
+default = ["sqlite", "auth-full"]
+```
+
+## API Endpoints
+
+### Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/v1/auth/login` | Login with email/password |
+| `POST` | `/api/v1/auth/register` | Register new user |
+| `POST` | `/api/v1/auth/logout` | Logout (session mode) |
+| `GET` | `/api/v1/auth/me` | Get current user |
+| `POST` | `/api/v1/auth/token` | Get JWT for session user |
+| `GET` | `/api/v1/auth/login/oidc` | Start OIDC login flow |
+| `GET` | `/api/v1/auth/callback` | OIDC callback |
 
 ## Project Structure
 
-The workspace consists of three main crates:
-
-- **`template-domain`**: The core business logic.
-  - Contains Entities, Value Objects, Repository Interfaces (Ports), and Services.
-  - **Dependencies**: Pure Rust only (no I/O, no heavy frameworks).
-  
-- **`template-infra`**: The adapters layer.
-  - Implements the Repository interfaces defined in `template-domain`.
-  - Content is heavily feature-gated (e.g., `sqlite`, `postgres`, `broker-nats`).
-  
-- **`template-api`**: The application entry point (Driving Adapter).
-  - Wires everything together using dependency injection.
-  - Handles HTTP/REST/gRPC interfaces.
-
-## Getting Started
-
-### Prerequisites
-
-- Rust (latest stable)
-- `cargo-generate` (`cargo install cargo-generate`)
-
-### Creating a New Project
-
-Use `cargo-generate` to scaffold a new project from this template:
-
-```bash
-cargo generate --git https://github.com/your-org/k-template.git
+```
+k-template/
+├── domain/          # Core business logic (no I/O dependencies)
+│   └── src/
+│       ├── entities.rs       # User entity
+│       ├── value_objects.rs  # Email, Password, OIDC newtypes
+│       ├── repositories.rs   # Repository interfaces (ports)
+│       └── services.rs       # Domain services
+│
+├── infra/           # Infrastructure adapters
+│   └── src/
+│       ├── auth/             # Auth backends (OIDC, JWT)
+│       └── user_repository.rs
+│
+├── api/             # HTTP API layer
+│   └── src/
+│       ├── routes/           # API endpoints
+│       ├── config.rs         # Configuration
+│       └── state.rs          # Application state
+│
+├── .env.example     # Configuration template
+└── compose.yml      # Docker Compose for local dev
 ```
 
-You will be prompted for:
-1. **Project Name**: The name of your new service.
-2. **Database**: Choose between `sqlite` (default) or `postgres`.
-
-The template will automatically clean up unused repository implementations based on your choice.
+## Development
 
 ### Running Tests
 
 ```bash
-# Run all tests
-cargo test
+# All tests
+cargo test --all-features
 
-# Run tests for a specific feature (e.g., postgres)
-cargo test -p template-infra --no-default-features --features postgres
+# Domain tests only
+cargo test -p domain
 ```
 
-## Configuration & Feature Flags
+### Database Migrations
 
-This template uses Cargo features to control compilation of infrastructure adapters.
+```bash
+# SQLite
+sqlx migrate run --source migrations_sqlite
 
-| Feature | Description | Crate |
-|---------|-------------|-------|
-| `sqlite` | Enables SQLite repository implementations and dependencies | `template-infra`, `template-api` |
-| `postgres` | Enables PostgreSQL repository implementations and dependencies | `template-infra`, `template-api` |
-| `broker-nats`| Enables NATS messaging support | `template-infra` |
-
-
-### Switching Databases
-
-To switch from the default SQLite to PostgreSQL in an existing project, update `Cargo.toml`:
-
-**`template-api/Cargo.toml`**:
-```toml
-[features]
-default = ["postgres"] 
-# ...
+# PostgreSQL  
+sqlx migrate run --source migrations_postgres
 ```
 
-**`template-infra/Cargo.toml`**:
-```toml
-[features]
-default = ["postgres"]
-# ...
-```
+## License
 
-## Architecture Guide
-
-### Adding a New Feature
-
-1. **Domain**: Define the Entity, Value Objects, and Repository Interface in `template-domain`.
-2. **Infra**: Implement the Repository Interface in `template-infra`.
-   - **Important**: Wrap your implementation in a feature flag (e.g., `#[cfg(feature = "my-feature")]`).
-3. **API**: Wire the new service in `template-api/src/main.rs` or a dedicated module.
-
-### Vendor Isolation
-
-All external dependencies (SQLx, NATS, etc.) should stay within `template-infra` or `template-api`. The `template-domain` crate should remain agnostic to specific technologies.
+MIT
