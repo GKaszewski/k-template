@@ -2,7 +2,7 @@
 
 A production-ready, modular Rust template for K-Suite applications, following Hexagonal Architecture principles.
 
-## 🌟 Features
+## Features
 
 - **Hexagonal Architecture**: Clear separation of concerns between Domain, Infrastructure, and API layers.
 - **Modular & Swappable**: Vendor implementations (databases, message brokers) are behind feature flags and trait objects.
@@ -10,7 +10,7 @@ A production-ready, modular Rust template for K-Suite applications, following He
 - **Cargo Generate Ready**: Pre-configured for `cargo-generate` to easily scaffold new services.
 - **Testable**: Domain logic is pure and easily testable; Infrastructure is tested with integration tests.
 
-## 🏗️ Project Structure
+## Project Structure
 
 The workspace consists of three main crates:
 
@@ -26,7 +26,7 @@ The workspace consists of three main crates:
   - Wires everything together using dependency injection.
   - Handles HTTP/REST/gRPC interfaces.
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -57,7 +57,7 @@ cargo test
 cargo test -p template-infra --no-default-features --features postgres
 ```
 
-## ⚙️ Configuration & Feature Flags
+## Configuration & Feature Flags
 
 This template uses Cargo features to control compilation of infrastructure adapters.
 
@@ -86,7 +86,7 @@ default = ["postgres"]
 # ...
 ```
 
-## 📐 Architecture Guide
+## Architecture Guide
 
 ### Adding a New Feature
 

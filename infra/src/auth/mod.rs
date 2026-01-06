@@ -118,3 +118,6 @@ pub mod backend {
 
 #[cfg(feature = "auth-oidc")]
 pub mod oidc;
+
+#[cfg(feature = "auth-jwt")]
+pub mod jwt;

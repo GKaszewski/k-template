@@ -2,11 +2,15 @@
 //!
 //! Proxies to infra implementation if enabled.
 
+#[cfg(feature = "auth-axum-login")]
 use std::sync::Arc;
 
+#[cfg(feature = "auth-axum-login")]
 use domain::UserRepository;
+#[cfg(feature = "auth-axum-login")]
 use infra::session_store::{InfraSessionStore, SessionManagerLayer};
 
+#[cfg(feature = "auth-axum-login")]
 use crate::error::ApiError;
 
 #[cfg(feature = "auth-axum-login")]

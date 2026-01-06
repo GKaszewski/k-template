@@ -1,35 +1,75 @@
-use axum::http::StatusCode;
+//! Authentication routes
+//!
+//! Provides login, register, logout, and token endpoints.
+//! Supports both session-based and JWT-based authentication.
+
+#[cfg(feature = "auth-oidc")]
+use axum::response::Response;
 use axum::{
     Router,
     extract::{Json, State},
+    http::StatusCode,
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
 };
+use serde::Serialize;
+#[cfg(feature = "auth-oidc")]
+use tower_sessions::Session;
 
+#[cfg(feature = "auth-axum-login")]
+use crate::config::AuthMode;
 use crate::{
     dto::{LoginRequest, RegisterRequest, UserResponse},
     error::ApiError,
+    extractors::CurrentUser,
     state::AppState,
 };
+#[cfg(feature = "auth-axum-login")]
 use domain::{DomainError, Email};
-use tower_sessions::Session;
+
+/// Token response for JWT authentication
+#[derive(Debug, Serialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: u64,
+}
+
+/// Login response that can be either a user (session mode) or a token (JWT mode)
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum LoginResponse {
+    User(UserResponse),
+    Token(TokenResponse),
+}
 
 pub fn router() -> Router<AppState> {
     let r = Router::new()
         .route("/login", post(login))
         .route("/register", post(register))
         .route("/logout", post(logout))
-        .route("/me", post(me));
+        .route("/me", get(me));
+
+    // Add token endpoint for getting JWT from session
+    #[cfg(feature = "auth-jwt")]
+    let r = r.route("/token", post(get_token));
 
     #[cfg(feature = "auth-oidc")]
     let r = r
-        .route("/login/oidc", axum::routing::get(oidc_login))
-        .route("/auth/callback", axum::routing::get(oidc_callback));
+        .route("/login/oidc", get(oidc_login))
+        .route("/callback", get(oidc_callback));
 
     r
 }
 
+/// Login endpoint
+///
+/// In session mode: Creates a session and returns user info
+/// In JWT mode: Validates credentials and returns a JWT token
+/// In both mode: Creates session AND returns JWT token
+#[cfg(feature = "auth-axum-login")]
 async fn login(
+    State(state): State<AppState>,
     mut auth_session: crate::auth::AuthSession,
     Json(payload): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
@@ -45,21 +85,56 @@ async fn login(
         None => return Err(ApiError::Validation("Invalid credentials".to_string())),
     };
 
-    auth_session
-        .login(&user)
-        .await
-        .map_err(|_| ApiError::Internal("Login failed".to_string()))?;
+    let auth_mode = state.config.auth_mode;
 
+    // In session or both mode, create session
+    if matches!(auth_mode, AuthMode::Session | AuthMode::Both) {
+        auth_session
+            .login(&user)
+            .await
+            .map_err(|_| ApiError::Internal("Login failed".to_string()))?;
+    }
+
+    // In JWT or both mode, return token
+    #[cfg(feature = "auth-jwt")]
+    if matches!(auth_mode, AuthMode::Jwt | AuthMode::Both) {
+        let token = create_jwt_for_user(&user.0, &state)?;
+        return Ok((
+            StatusCode::OK,
+            Json(LoginResponse::Token(TokenResponse {
+                access_token: token,
+                token_type: "Bearer".to_string(),
+                expires_in: state.config.jwt_expiry_hours * 3600,
+            })),
+        ));
+    }
+
+    // Session mode: return user info
     Ok((
         StatusCode::OK,
-        Json(UserResponse {
+        Json(LoginResponse::User(UserResponse {
             id: user.0.id,
             email: user.0.email.into_inner(),
             created_at: user.0.created_at,
-        }),
+        })),
     ))
 }
 
+/// Fallback login when auth-axum-login is not enabled
+/// Without auth-axum-login, password-based authentication is not available.
+/// Use OIDC login instead: GET /api/v1/auth/login/oidc
+#[cfg(not(feature = "auth-axum-login"))]
+async fn login(
+    State(_state): State<AppState>,
+    Json(_payload): Json<LoginRequest>,
+) -> Result<(StatusCode, Json<LoginResponse>), ApiError> {
+    Err(ApiError::Internal(
+        "Password-based login not available. auth-axum-login feature is required. Use OIDC login at /api/v1/auth/login/oidc instead.".to_string(),
+    ))
+}
+
+/// Register endpoint
+#[cfg(feature = "auth-axum-login")]
 async fn register(
     State(state): State<AppState>,
     mut auth_session: crate::auth::AuthSession,
@@ -76,9 +151,6 @@ async fn register(
         )));
     }
 
-    // Note: In a real app, you would hash the password here.
-    // This template uses a simplified User::new which doesn't take password.
-    // You should extend User to handle passwords or use an OIDC flow.
     let email = Email::try_from(payload.email).map_err(|e| ApiError::Validation(e.to_string()))?;
 
     // Using email as subject for local auth for now
@@ -87,24 +159,54 @@ async fn register(
         .find_or_create(&email.as_ref().to_string(), email.as_ref())
         .await?;
 
-    // Log the user in
-    let auth_user = crate::auth::AuthUser(user.clone());
+    let auth_mode = state.config.auth_mode;
 
-    auth_session
-        .login(&auth_user)
-        .await
-        .map_err(|_| ApiError::Internal("Login failed".to_string()))?;
+    // In session or both mode, create session
+    if matches!(auth_mode, AuthMode::Session | AuthMode::Both) {
+        let auth_user = crate::auth::AuthUser(user.clone());
+        auth_session
+            .login(&auth_user)
+            .await
+            .map_err(|_| ApiError::Internal("Login failed".to_string()))?;
+    }
+
+    // In JWT or both mode, return token
+    #[cfg(feature = "auth-jwt")]
+    if matches!(auth_mode, AuthMode::Jwt | AuthMode::Both) {
+        let token = create_jwt_for_user(&user, &state)?;
+        return Ok((
+            StatusCode::CREATED,
+            Json(LoginResponse::Token(TokenResponse {
+                access_token: token,
+                token_type: "Bearer".to_string(),
+                expires_in: state.config.jwt_expiry_hours * 3600,
+            })),
+        ));
+    }
 
     Ok((
         StatusCode::CREATED,
-        Json(UserResponse {
+        Json(LoginResponse::User(UserResponse {
             id: user.id,
             email: user.email.into_inner(),
             created_at: user.created_at,
-        }),
+        })),
     ))
 }
 
+/// Fallback register when auth-axum-login is not enabled
+#[cfg(not(feature = "auth-axum-login"))]
+async fn register(
+    State(_state): State<AppState>,
+    Json(_payload): Json<RegisterRequest>,
+) -> Result<(StatusCode, Json<LoginResponse>), ApiError> {
+    Err(ApiError::Internal(
+        "Session-based registration not available. Use JWT token endpoint.".to_string(),
+    ))
+}
+
+/// Logout endpoint
+#[cfg(feature = "auth-axum-login")]
 async fn logout(mut auth_session: crate::auth::AuthSession) -> impl IntoResponse {
     match auth_session.logout().await {
         Ok(_) => StatusCode::OK,
@@ -112,23 +214,61 @@ async fn logout(mut auth_session: crate::auth::AuthSession) -> impl IntoResponse
     }
 }
 
-async fn me(auth_session: crate::auth::AuthSession) -> Result<impl IntoResponse, ApiError> {
-    let user = auth_session
-        .user
-        .ok_or(ApiError::Unauthorized("Not logged in".to_string()))?;
+/// Fallback logout when auth-axum-login is not enabled
+#[cfg(not(feature = "auth-axum-login"))]
+async fn logout() -> impl IntoResponse {
+    // JWT tokens can't be "logged out" server-side without a blocklist
+    // Just return OK
+    StatusCode::OK
+}
 
+/// Get current user info
+async fn me(CurrentUser(user): CurrentUser) -> Result<impl IntoResponse, ApiError> {
     Ok(Json(UserResponse {
-        id: user.0.id,
-        email: user.0.email.into_inner(),
-        created_at: user.0.created_at,
+        id: user.id,
+        email: user.email.into_inner(),
+        created_at: user.created_at,
     }))
 }
 
-#[cfg(feature = "auth-oidc")]
-async fn oidc_login(
+/// Get a JWT token for the current session user
+///
+/// This allows session-authenticated users to obtain a JWT for API access.
+#[cfg(feature = "auth-jwt")]
+async fn get_token(
     State(state): State<AppState>,
-    session: Session,
+    CurrentUser(user): CurrentUser,
 ) -> Result<impl IntoResponse, ApiError> {
+    let token = create_jwt_for_user(&user, &state)?;
+
+    Ok(Json(TokenResponse {
+        access_token: token,
+        token_type: "Bearer".to_string(),
+        expires_in: state.config.jwt_expiry_hours * 3600,
+    }))
+}
+
+/// Helper to create JWT for a user
+#[cfg(feature = "auth-jwt")]
+fn create_jwt_for_user(user: &domain::User, state: &AppState) -> Result<String, ApiError> {
+    let validator = state
+        .jwt_validator
+        .as_ref()
+        .ok_or_else(|| ApiError::Internal("JWT not configured".to_string()))?;
+
+    validator
+        .create_token(user)
+        .map_err(|e| ApiError::Internal(format!("Failed to create token: {}", e)))
+}
+
+// ============================================================================
+// OIDC Routes
+// ============================================================================
+
+#[cfg(feature = "auth-oidc")]
+async fn oidc_login(State(state): State<AppState>, session: Session) -> Result<Response, ApiError> {
+    use axum::http::header;
+
     let service = state
         .oidc_service
         .as_ref()
@@ -149,7 +289,19 @@ async fn oidc_login(
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?;
 
-    Ok(axum::response::Redirect::to(&url))
+    let response = axum::response::Redirect::to(&url).into_response();
+    let (mut parts, body) = response.into_parts();
+
+    parts.headers.insert(
+        header::CACHE_CONTROL,
+        "no-cache, no-store, must-revalidate".parse().unwrap(),
+    );
+    parts
+        .headers
+        .insert(header::PRAGMA, "no-cache".parse().unwrap());
+    parts.headers.insert(header::EXPIRES, "0".parse().unwrap());
+
+    Ok(Response::from_parts(parts, body))
 }
 
 #[cfg(feature = "auth-oidc")]
@@ -159,7 +311,7 @@ struct CallbackParams {
     state: String,
 }
 
-#[cfg(feature = "auth-oidc")]
+#[cfg(all(feature = "auth-oidc", feature = "auth-axum-login"))]
 async fn oidc_callback(
     State(state): State<AppState>,
     session: Session,
@@ -181,7 +333,6 @@ async fn oidc_callback(
         return Err(ApiError::Validation("Invalid CSRF token".into()));
     }
 
-    // 2. Retrieve secrets
     let stored_pkce: String = session
         .get("oidc_pkce")
         .await
@@ -204,11 +355,17 @@ async fn oidc_callback(
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
-    auth_session
-        .login(&crate::auth::AuthUser(user))
-        .await
-        .map_err(|_| ApiError::Internal("Login failed".into()))?;
+    let auth_mode = state.config.auth_mode;
 
+    // In session or both mode, create session
+    if matches!(auth_mode, AuthMode::Session | AuthMode::Both) {
+        auth_session
+            .login(&crate::auth::AuthUser(user.clone()))
+            .await
+            .map_err(|_| ApiError::Internal("Login failed".into()))?;
+    }
+
+    // Clean up OIDC state
     let _: Option<String> = session
         .remove("oidc_csrf")
         .await
@@ -222,5 +379,101 @@ async fn oidc_callback(
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?;
 
-    Ok(axum::response::Redirect::to("/"))
+    // In JWT mode, return token as JSON
+    #[cfg(feature = "auth-jwt")]
+    if matches!(auth_mode, AuthMode::Jwt | AuthMode::Both) {
+        let token = create_jwt_for_user(&user, &state)?;
+        return Ok(Json(TokenResponse {
+            access_token: token,
+            token_type: "Bearer".to_string(),
+            expires_in: state.config.jwt_expiry_hours * 3600,
+        })
+        .into_response());
+    }
+
+    // Session mode: return user info
+    Ok(Json(UserResponse {
+        id: user.id,
+        email: user.email.into_inner(),
+        created_at: user.created_at,
+    })
+    .into_response())
+}
+
+/// Fallback OIDC callback when auth-axum-login is not enabled
+#[cfg(all(feature = "auth-oidc", not(feature = "auth-axum-login")))]
+async fn oidc_callback(
+    State(state): State<AppState>,
+    session: Session,
+    axum::extract::Query(params): axum::extract::Query<CallbackParams>,
+) -> Result<impl IntoResponse, ApiError> {
+    let service = state
+        .oidc_service
+        .as_ref()
+        .ok_or(ApiError::Internal("OIDC not configured".into()))?;
+
+    let stored_csrf: String = session
+        .get("oidc_csrf")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing CSRF token".into()))?;
+
+    if params.state != stored_csrf {
+        return Err(ApiError::Validation("Invalid CSRF token".into()));
+    }
+
+    let stored_pkce: String = session
+        .get("oidc_pkce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing PKCE".into()))?;
+    let stored_nonce: String = session
+        .get("oidc_nonce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing Nonce".into()))?;
+
+    let oidc_user = service
+        .resolve_callback(params.code, stored_nonce, stored_pkce)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let user = state
+        .user_service
+        .find_or_create(&oidc_user.subject, &oidc_user.email)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    // Clean up OIDC state
+    let _: Option<String> = session
+        .remove("oidc_csrf")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    let _: Option<String> = session
+        .remove("oidc_pkce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    let _: Option<String> = session
+        .remove("oidc_nonce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+
+    // Return token as JSON
+    #[cfg(feature = "auth-jwt")]
+    {
+        let token = create_jwt_for_user(&user, &state)?;
+        return Ok(Json(TokenResponse {
+            access_token: token,
+            token_type: "Bearer".to_string(),
+            expires_in: state.config.jwt_expiry_hours * 3600,
+        }));
+    }
+
+    #[cfg(not(feature = "auth-jwt"))]
+    {
+        let _ = user; // Suppress unused warning
+        Err(ApiError::Internal(
+            "No auth backend available for OIDC callback".to_string(),
+        ))
+    }
 }

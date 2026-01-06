@@ -3,7 +3,7 @@ use openidconnect::{
     AccessTokenHash, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken,
     EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
     OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    StandardErrorResponse, TokenResponse,
+    StandardErrorResponse, TokenResponse, UserInfoClaims,
     core::{
         CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
         CoreGenderClaim, CoreJsonWebKey, CoreJweContentEncryptionAlgorithm, CoreProviderMetadata,
@@ -36,6 +36,7 @@ pub type OidcClient = Client<
 #[derive(Clone)]
 pub struct OidcService {
     client: OidcClient,
+    resource_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -51,7 +52,31 @@ impl OidcService {
         client_id: String,
         client_secret: String,
         redirect_url: String,
+        resource_id: Option<String>,
     ) -> anyhow::Result<Self> {
+        let client_id = client_id.trim().to_string();
+        let redirect_url = redirect_url.trim().to_string();
+        let issuer = issuer.trim().to_string();
+
+        // 2. Handle Empty Secret (For PKCE/Public Clients)
+        let client_secret_clean = client_secret.trim();
+        let client_secret_opt = if client_secret_clean.is_empty() {
+            None
+        } else {
+            Some(ClientSecret::new(client_secret_clean.to_string()))
+        };
+
+        tracing::debug!("🔵 OIDC Setup: Client ID = '{}'", client_id);
+        tracing::debug!("🔵 OIDC Setup: Redirect  = '{}'", redirect_url);
+        tracing::debug!(
+            "🔵 OIDC Setup: Secret    = {:?}",
+            if client_secret_opt.is_some() {
+                "SET"
+            } else {
+                "NONE"
+            }
+        );
+
         let http_client = reqwest::ClientBuilder::new()
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
@@ -62,11 +87,14 @@ impl OidcService {
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
             ClientId::new(client_id),
-            Some(ClientSecret::new(client_secret)),
+            client_secret_opt,
         )
         .set_redirect_uri(RedirectUrl::new(redirect_url)?);
 
-        Ok(Self { client })
+        Ok(Self {
+            client,
+            resource_id,
+        })
     }
 
     // todo: replace this tuple with newtype
@@ -118,7 +146,15 @@ impl OidcService {
             .id_token()
             .ok_or_else(|| anyhow!("Server did not return an ID token"))?;
 
-        let id_token_verifier = self.client.id_token_verifier();
+        let mut id_token_verifier = self.client.id_token_verifier().clone();
+
+        let trusted_resource_id = self.resource_id.clone();
+
+        if let Some(resource_id) = trusted_resource_id {
+            id_token_verifier = id_token_verifier
+                .set_other_audience_verifier_fn(move |aud| aud.as_str() == resource_id);
+        }
+
         let claims = id_token.claims(&id_token_verifier, &nonce)?;
 
         if let Some(expected_access_token_hash) = claims.access_token_hash() {
@@ -133,13 +169,28 @@ impl OidcService {
             }
         }
 
+        let email = if let Some(email) = claims.email() {
+            Some(email.as_str().to_string())
+        } else {
+            // Fallback: Call UserInfo Endpoint using the Access Token
+            tracing::debug!("🔵 Email missing in ID Token, fetching UserInfo...");
+
+            let user_info: UserInfoClaims<EmptyAdditionalClaims, CoreGenderClaim> = self
+                .client
+                .user_info(token_response.access_token().clone(), None)?
+                .request_async(&http_client)
+                .await?;
+
+            user_info.email().map(|e| e.as_str().to_string())
+        };
+
+        // If email is still missing, we must error out because your app requires valid emails
+        let email =
+            email.ok_or_else(|| anyhow!("User has no verified email address in ZITADEL"))?;
+
         Ok(OidcUser {
             subject: claims.subject().to_string(),
-            email: claims
-                .email()
-                .map(|email| email.as_str())
-                .unwrap_or("<not provided>")
-                .to_string(),
+            email,
         })
     }
 }

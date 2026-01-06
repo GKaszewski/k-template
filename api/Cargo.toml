@@ -5,11 +5,13 @@ edition = "2024"
 default-run = "api"
 
 [features]
-default = ["sqlite", "auth-axum-login", "auth-oidc"]
+default = ["sqlite", "auth-axum-login", "auth-oidc", "auth-jwt"]
 sqlite = ["infra/sqlite", "tower-sessions-sqlx-store/sqlite"]
 postgres = ["infra/postgres", "tower-sessions-sqlx-store/postgres"]
 auth-axum-login = ["infra/auth-axum-login"]
 auth-oidc = ["infra/auth-oidc"]
+auth-jwt = ["infra/auth-jwt"]
+auth-full = ["auth-axum-login", "auth-oidc", "auth-jwt"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [

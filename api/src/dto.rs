@@ -40,3 +40,12 @@ pub struct UserResponse {
 pub struct ConfigResponse {
     pub allow_registration: bool,
 }
+
+#[cfg(feature = "auth-jwt")]
+#[derive(Debug, Serialize, Deserialize)]
+// also newtypes
+pub struct Claims {
+    pub sub: String,
+    pub email: String,
+    pub exp: usize,
+}
