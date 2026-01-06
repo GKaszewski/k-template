@@ -51,8 +51,8 @@ pub mod backend {
 
     #[derive(Clone, Debug, Deserialize)]
     pub struct Credentials {
-        pub email: String,
-        pub password: String,
+        pub email: domain::Email,
+        pub password: domain::Password,
     }
 
     #[derive(Debug, thiserror::Error)]
@@ -72,14 +72,14 @@ pub mod backend {
         ) -> Result<Option<Self::User>, Self::Error> {
             let user = self
                 .user_repo
-                .find_by_email(&creds.email)
+                .find_by_email(creds.email.as_ref())
                 .await
                 .map_err(|e| AuthError::Anyhow(anyhow::anyhow!(e)))?;
 
             if let Some(user) = user {
                 if let Some(hash) = &user.password_hash {
                     // Verify password
-                    if verify_password(&creds.password, hash).is_ok() {
+                    if verify_password(creds.password.as_ref(), hash).is_ok() {
                         return Ok(Some(AuthUser(user)));
                     }
                 }

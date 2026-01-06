@@ -25,7 +25,7 @@ use crate::{
     state::AppState,
 };
 #[cfg(feature = "auth-axum-login")]
-use domain::{DomainError, Email};
+use domain::DomainError;
 
 /// Token response for JWT authentication
 #[derive(Debug, Serialize)]
@@ -140,18 +140,19 @@ async fn register(
     mut auth_session: crate::auth::AuthSession,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
+    // Email is already validated by the newtype deserialization
+    let email = payload.email;
+
     if state
         .user_service
-        .find_by_email(&payload.email)
+        .find_by_email(email.as_ref())
         .await?
         .is_some()
     {
         return Err(ApiError::Domain(DomainError::UserAlreadyExists(
-            payload.email,
+            email.as_ref().to_string(),
         )));
     }
-
-    let email = Email::try_from(payload.email).map_err(|e| ApiError::Validation(e.to_string()))?;
 
     // Using email as subject for local auth for now
     let user = state
@@ -274,22 +275,22 @@ async fn oidc_login(State(state): State<AppState>, session: Session) -> Result<R
         .as_ref()
         .ok_or(ApiError::Internal("OIDC not configured".into()))?;
 
-    let (url, csrf, nonce, pkce) = service.get_authorization_url();
+    let auth_data = service.get_authorization_url();
 
     session
-        .insert("oidc_csrf", csrf)
+        .insert("oidc_csrf", &auth_data.csrf_token)
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?;
     session
-        .insert("oidc_nonce", nonce)
+        .insert("oidc_nonce", &auth_data.nonce)
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?;
     session
-        .insert("oidc_pkce", pkce)
+        .insert("oidc_pkce", &auth_data.pkce_verifier)
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?;
 
-    let response = axum::response::Redirect::to(&url).into_response();
+    let response = axum::response::Redirect::to(auth_data.url.as_str()).into_response();
     let (mut parts, body) = response.into_parts();
 
     parts.headers.insert(
@@ -323,29 +324,33 @@ async fn oidc_callback(
         .as_ref()
         .ok_or(ApiError::Internal("OIDC not configured".into()))?;
 
-    let stored_csrf: String = session
+    let stored_csrf: domain::CsrfToken = session
         .get("oidc_csrf")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing CSRF token".into()))?;
 
-    if params.state != stored_csrf {
+    if params.state != stored_csrf.as_ref() {
         return Err(ApiError::Validation("Invalid CSRF token".into()));
     }
 
-    let stored_pkce: String = session
+    let stored_pkce: domain::PkceVerifier = session
         .get("oidc_pkce")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing PKCE".into()))?;
-    let stored_nonce: String = session
+    let stored_nonce: domain::OidcNonce = session
         .get("oidc_nonce")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing Nonce".into()))?;
 
     let oidc_user = service
-        .resolve_callback(params.code, stored_nonce, stored_pkce)
+        .resolve_callback(
+            domain::AuthorizationCode::new(params.code),
+            stored_nonce,
+            stored_pkce,
+        )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
@@ -412,29 +417,33 @@ async fn oidc_callback(
         .as_ref()
         .ok_or(ApiError::Internal("OIDC not configured".into()))?;
 
-    let stored_csrf: String = session
+    let stored_csrf: domain::CsrfToken = session
         .get("oidc_csrf")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing CSRF token".into()))?;
 
-    if params.state != stored_csrf {
+    if params.state != stored_csrf.as_ref() {
         return Err(ApiError::Validation("Invalid CSRF token".into()));
     }
 
-    let stored_pkce: String = session
+    let stored_pkce: domain::PkceVerifier = session
         .get("oidc_pkce")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing PKCE".into()))?;
-    let stored_nonce: String = session
+    let stored_nonce: domain::OidcNonce = session
         .get("oidc_nonce")
         .await
         .map_err(|_| ApiError::Internal("Session error".into()))?
         .ok_or(ApiError::Validation("Missing Nonce".into()))?;
 
     let oidc_user = service
-        .resolve_callback(params.code, stored_nonce, stored_pkce)
+        .resolve_callback(
+            domain::AuthorizationCode::new(params.code),
+            stored_nonce,
+            stored_pkce,
+        )
         .await
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 

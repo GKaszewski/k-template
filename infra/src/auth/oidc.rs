@@ -1,9 +1,12 @@
 use anyhow::anyhow;
+use domain::{
+    AuthorizationCode, AuthorizationUrlData, ClientId, ClientSecret, CsrfToken, IssuerUrl,
+    OidcNonce, PkceVerifier, RedirectUrl, ResourceId,
+};
 use openidconnect::{
-    AccessTokenHash, AuthorizationCode, Client, ClientId, ClientSecret, CsrfToken,
-    EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet, IssuerUrl, Nonce,
-    OAuth2TokenResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
-    StandardErrorResponse, TokenResponse, UserInfoClaims,
+    AccessTokenHash, Client, EmptyAdditionalClaims, EndpointMaybeSet, EndpointNotSet, EndpointSet,
+    OAuth2TokenResponse, PkceCodeChallenge, Scope, StandardErrorResponse, TokenResponse,
+    UserInfoClaims,
     core::{
         CoreAuthDisplay, CoreAuthPrompt, CoreAuthenticationFlow, CoreClient, CoreErrorResponseType,
         CoreGenderClaim, CoreJsonWebKey, CoreJweContentEncryptionAlgorithm, CoreProviderMetadata,
@@ -36,7 +39,7 @@ pub type OidcClient = Client<
 #[derive(Clone)]
 pub struct OidcService {
     client: OidcClient,
-    resource_id: Option<String>,
+    resource_id: Option<ResourceId>,
 }
 
 #[derive(Debug)]
@@ -46,31 +49,19 @@ pub struct OidcUser {
 }
 
 impl OidcService {
-    //todo: replace Strings with newtypes
+    /// Create a new OIDC service with validated configuration newtypes
     pub async fn new(
-        issuer: String,
-        client_id: String,
-        client_secret: String,
-        redirect_url: String,
-        resource_id: Option<String>,
+        issuer: IssuerUrl,
+        client_id: ClientId,
+        client_secret: Option<ClientSecret>,
+        redirect_url: RedirectUrl,
+        resource_id: Option<ResourceId>,
     ) -> anyhow::Result<Self> {
-        let client_id = client_id.trim().to_string();
-        let redirect_url = redirect_url.trim().to_string();
-        let issuer = issuer.trim().to_string();
-
-        // 2. Handle Empty Secret (For PKCE/Public Clients)
-        let client_secret_clean = client_secret.trim();
-        let client_secret_opt = if client_secret_clean.is_empty() {
-            None
-        } else {
-            Some(ClientSecret::new(client_secret_clean.to_string()))
-        };
-
         tracing::debug!("🔵 OIDC Setup: Client ID = '{}'", client_id);
         tracing::debug!("🔵 OIDC Setup: Redirect  = '{}'", redirect_url);
         tracing::debug!(
             "🔵 OIDC Setup: Secret    = {:?}",
-            if client_secret_opt.is_some() {
+            if client_secret.is_some() {
                 "SET"
             } else {
                 "NONE"
@@ -81,15 +72,26 @@ impl OidcService {
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
 
-        let provider_metadata =
-            CoreProviderMetadata::discover_async(IssuerUrl::new(issuer)?, &http_client).await?;
+        let provider_metadata = CoreProviderMetadata::discover_async(
+            openidconnect::IssuerUrl::new(issuer.as_ref().to_string())?,
+            &http_client,
+        )
+        .await?;
+
+        // Convert to openidconnect types
+        let oidc_client_id = openidconnect::ClientId::new(client_id.as_ref().to_string());
+        let oidc_client_secret = client_secret
+            .as_ref()
+            .filter(|s| !s.is_empty())
+            .map(|s| openidconnect::ClientSecret::new(s.as_ref().to_string()));
+        let oidc_redirect_url = openidconnect::RedirectUrl::new(redirect_url.as_ref().to_string())?;
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
-            ClientId::new(client_id),
-            client_secret_opt,
+            oidc_client_id,
+            oidc_client_secret,
         )
-        .set_redirect_uri(RedirectUrl::new(redirect_url)?);
+        .set_redirect_uri(oidc_redirect_url);
 
         Ok(Self {
             client,
@@ -97,48 +99,53 @@ impl OidcService {
         })
     }
 
-    // todo: replace this tuple with newtype
-    pub fn get_authorization_url(&self) -> (String, String, String, String) {
+    /// Get the authorization URL and associated state for OIDC login
+    ///
+    /// Returns structured data instead of a raw tuple for better type safety
+    pub fn get_authorization_url(&self) -> AuthorizationUrlData {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         let (auth_url, csrf_token, nonce) = self
             .client
             .authorize_url(
                 CoreAuthenticationFlow::AuthorizationCode,
-                CsrfToken::new_random,
-                Nonce::new_random,
+                openidconnect::CsrfToken::new_random,
+                openidconnect::Nonce::new_random,
             )
             .add_scope(Scope::new("profile".to_string()))
             .add_scope(Scope::new("email".to_string()))
             .set_pkce_challenge(pkce_challenge)
             .url();
 
-        (
-            auth_url.to_string(),
-            csrf_token.secret().to_string(),
-            nonce.secret().to_string(),
-            pkce_verifier.secret().to_string(),
-        )
+        AuthorizationUrlData {
+            url: auth_url.into(),
+            csrf_token: CsrfToken::new(csrf_token.secret().to_string()),
+            nonce: OidcNonce::new(nonce.secret().to_string()),
+            pkce_verifier: PkceVerifier::new(pkce_verifier.secret().to_string()),
+        }
     }
 
-    //todo: replace strings with newtype
+    /// Resolve the OIDC callback with type-safe parameters
     pub async fn resolve_callback(
         &self,
-        code: String,
-        nonce: String,
-        pkce_verifier: String,
+        code: AuthorizationCode,
+        nonce: OidcNonce,
+        pkce_verifier: PkceVerifier,
     ) -> anyhow::Result<OidcUser> {
         let http_client = reqwest::ClientBuilder::new()
             .redirect(reqwest::redirect::Policy::none())
             .build()?;
 
-        let pkce_verifier = PkceCodeVerifier::new(pkce_verifier);
-        let nonce = Nonce::new(nonce);
+        let oidc_pkce_verifier =
+            openidconnect::PkceCodeVerifier::new(pkce_verifier.as_ref().to_string());
+        let oidc_nonce = openidconnect::Nonce::new(nonce.as_ref().to_string());
 
         let token_response = self
             .client
-            .exchange_code(AuthorizationCode::new(code))?
-            .set_pkce_verifier(pkce_verifier)
+            .exchange_code(openidconnect::AuthorizationCode::new(
+                code.as_ref().to_string(),
+            ))?
+            .set_pkce_verifier(oidc_pkce_verifier)
             .request_async(&http_client)
             .await?;
 
@@ -148,14 +155,13 @@ impl OidcService {
 
         let mut id_token_verifier = self.client.id_token_verifier().clone();
 
-        let trusted_resource_id = self.resource_id.clone();
-
-        if let Some(resource_id) = trusted_resource_id {
+        if let Some(resource_id) = &self.resource_id {
+            let trusted_resource_id = resource_id.as_ref().to_string();
             id_token_verifier = id_token_verifier
-                .set_other_audience_verifier_fn(move |aud| aud.as_str() == resource_id);
+                .set_other_audience_verifier_fn(move |aud| aud.as_str() == trusted_resource_id);
         }
 
-        let claims = id_token.claims(&id_token_verifier, &nonce)?;
+        let claims = id_token.claims(&id_token_verifier, &oidc_nonce)?;
 
         if let Some(expected_access_token_hash) = claims.access_token_hash() {
             let actual_access_token_hash = AccessTokenHash::from_token(

@@ -33,15 +33,24 @@ impl AppState {
             &config.oidc_resource_id,
         ) {
             tracing::info!("Initializing OIDC service with issuer: {}", issuer);
+
+            // Construct newtypes from config strings
+            let issuer_url = domain::IssuerUrl::new(issuer)
+                .map_err(|e| anyhow::anyhow!("Invalid OIDC issuer URL: {}", e))?;
+            let client_id = domain::ClientId::new(id)
+                .map_err(|e| anyhow::anyhow!("Invalid OIDC client ID: {}", e))?;
+            let client_secret = secret.as_ref().map(|s| domain::ClientSecret::new(s));
+            let redirect_url = domain::RedirectUrl::new(redirect)
+                .map_err(|e| anyhow::anyhow!("Invalid OIDC redirect URL: {}", e))?;
+            let resource = resource_id
+                .as_ref()
+                .map(|r| domain::ResourceId::new(r))
+                .transpose()
+                .map_err(|e| anyhow::anyhow!("Invalid OIDC resource ID: {}", e))?;
+
             Some(Arc::new(
-                OidcService::new(
-                    issuer.clone(),
-                    id.clone(),
-                    secret.clone().unwrap_or_default(),
-                    redirect.clone(),
-                    resource_id.clone(),
-                )
-                .await?,
+                OidcService::new(issuer_url, client_id, client_secret, redirect_url, resource)
+                    .await?,
             ))
         } else {
             None
