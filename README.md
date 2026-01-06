@@ -13,7 +13,20 @@ A production-ready, modular Rust API template for K-Suite applications, followin
 
 ## Quick Start
 
-### 1. Clone and Configure
+### Option 1: Use cargo-generate (Recommended)
+
+```bash
+cargo generate --git https://github.com/GKaszewski/k-template.git
+```
+
+You'll be prompted to choose:
+- **Project name**: Your new service name
+- **Database**: `sqlite` or `postgres`
+- **Session auth**: Enable cookie-based sessions
+- **JWT auth**: Enable Bearer token authentication
+- **OIDC**: Enable OpenID Connect integration
+
+### Option 2: Clone directly
 
 ```bash
 git clone https://github.com/GKaszewski/k-template.git my-api
@@ -22,7 +35,7 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-### 2. Run
+### Run
 
 ```bash
 # Development (with hot reload via cargo-watch)

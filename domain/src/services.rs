@@ -54,4 +54,11 @@ impl UserService {
     pub async fn find_by_email(&self, email: &str) -> DomainResult<Option<User>> {
         self.user_repository.find_by_email(email).await
     }
+
+    pub async fn create_local(&self, email: &str, password_hash: &str) -> DomainResult<User> {
+        let email = Email::try_from(email)?;
+        let user = User::new_local(email, password_hash);
+        self.user_repository.save(&user).await?;
+        Ok(user)
+    }
 }

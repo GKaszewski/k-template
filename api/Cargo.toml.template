@@ -5,7 +5,7 @@ edition = "2024"
 default-run = "api"
 
 [features]
-default = ["sqlite"]
+default = ["{{database}}"{% if auth_session %}, "auth-axum-login"{% endif %}{% if auth_oidc %}, "auth-oidc"{% endif %}{% if auth_jwt %}, "auth-jwt"{% endif %}]
 sqlite = ["infra/sqlite", "tower-sessions-sqlx-store/sqlite"]
 postgres = ["infra/postgres", "tower-sessions-sqlx-store/postgres"]
 auth-axum-login = ["infra/auth-axum-login"]
@@ -17,13 +17,13 @@ auth-full = ["auth-axum-login", "auth-oidc", "auth-jwt"]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
     "logging",
     "db-sqlx",
-    "sqlite",
+    "{{database}}",
     "http",
     "auth",
     "sessions-db",
 ] }
 domain = { path = "../domain" }
-infra = { path = "../infra", default-features = false, features = ["sqlite"] }
+infra = { path = "../infra", default-features = false, features = ["{{database}}"] }
 
 #Web framework
 axum = { version = "0.8.8", features = ["macros"] }
@@ -32,7 +32,7 @@ tower-http = { version = "0.6.2", features = ["cors", "trace"] }
 
 # Authentication
 # Moved to infra
-tower-sessions-sqlx-store = { version = "0.15", features = ["sqlite"] }
+tower-sessions-sqlx-store = { version = "0.15", features = ["{{database}}"] }
 # password-auth removed
 time = "0.3"
 async-trait = "0.1.89"

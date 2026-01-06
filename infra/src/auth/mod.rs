@@ -114,6 +114,10 @@ pub mod backend {
         let auth_layer = axum_login::AuthManagerLayerBuilder::new(backend, session_layer).build();
         Ok(auth_layer)
     }
+
+    pub fn hash_password(password: &str) -> String {
+        password_auth::generate_hash(password)
+    }
 }
 
 #[cfg(feature = "auth-oidc")]

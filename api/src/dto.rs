@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 /// Login request with validated email and password newtypes
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct LoginRequest {
     /// Email is validated on deserialization
     pub email: Email,
@@ -19,6 +20,7 @@ pub struct LoginRequest {
 
 /// Register request with validated email and password newtypes
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RegisterRequest {
     /// Email is validated on deserialization
     pub email: Email,

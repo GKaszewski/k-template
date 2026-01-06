@@ -154,10 +154,13 @@ async fn register(
         )));
     }
 
-    // Using email as subject for local auth for now
+    // Hash password
+    let password_hash = infra::auth::backend::hash_password(payload.password.as_ref());
+
+    // Create user with password
     let user = state
         .user_service
-        .find_or_create(&email.as_ref().to_string(), email.as_ref())
+        .create_local(email.as_ref(), &password_hash)
         .await?;
 
     let auth_mode = state.config.auth_mode;

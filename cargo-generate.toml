@@ -1,21 +1,46 @@
 [template]
 cargo_generate_version = ">=0.21.0"
-ignore = [".git", "target", ".idea", ".vscode"]
+ignore = [
+    ".git",
+    "target",
+    ".idea",
+    ".vscode",
+    "data.db",
+    "api/Cargo.toml",
+    "infra/Cargo.toml",
+]
 
-[placeholders]
-project_name = { type = "string", prompt = "Project name" }
-database = { type = "string", prompt = "Database type", choices = [
-    "sqlite",
-    "postgres",
-], default = "sqlite" }
+[filenames]
+"api/Cargo.toml.template" = "api/Cargo.toml"
+"infra/Cargo.toml.template" = "infra/Cargo.toml"
 
-[conditional]
-# Conditional dependencies based on database choice
-sqlite = { condition = "database == 'sqlite'", ignore = [
-    "infra/src/user_repository_postgres.rs",
-    "migrations_postgres",
-] }
-postgres = { condition = "database == 'postgres'", ignore = [
-    "infra/src/user_repository_sqlite.rs",
-    "migrations",
-] }
+[placeholders.project_name]
+type = "string"
+prompt = "Project name"
+
+[placeholders.database]
+type = "string"
+prompt = "Database type"
+choices = ["sqlite", "postgres"]
+default = "sqlite"
+
+[placeholders.auth_session]
+type = "bool"
+prompt = "Enable session-based authentication (cookies)?"
+default = true
+
+[placeholders.auth_jwt]
+type = "bool"
+prompt = "Enable JWT authentication (Bearer tokens)?"
+default = true
+
+[placeholders.auth_oidc]
+type = "bool"
+prompt = "Enable OIDC integration (Login with Google, etc.)?"
+default = true
+
+[conditional.'database == "sqlite"']
+ignore = ["migrations_postgres"]
+
+[conditional.'database == "postgres"']
+ignore = ["migrations_sqlite"]

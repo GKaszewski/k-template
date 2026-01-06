@@ -131,20 +131,3 @@ async fn try_session_auth(parts: &mut Parts) -> Result<Option<User>, ApiError> {
 
     Ok(None)
 }
-
-/// Fallback for when auth-axum-login is not enabled
-#[cfg(not(feature = "auth-axum-login"))]
-async fn try_session_auth(_parts: &mut Parts) -> Result<Option<User>, ApiError> {
-    Ok(None)
-}
-
-/// Fallback for when auth-jwt is not enabled but auth mode requires it
-#[cfg(not(feature = "auth-jwt"))]
-async fn try_jwt_auth(_parts: &mut Parts, state: &AppState) -> Result<Option<User>, ApiError> {
-    if matches!(state.config.auth_mode, AuthMode::Jwt) {
-        return Err(ApiError::Internal(
-            "JWT auth mode configured but auth-jwt feature not enabled".to_string(),
-        ));
-    }
-    Ok(None)
-}
