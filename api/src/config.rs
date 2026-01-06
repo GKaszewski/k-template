@@ -6,6 +6,7 @@ use std::env;
 
 use serde::Deserialize;
 
+//todo: replace with newtypes
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub database_url: String,
@@ -26,6 +27,11 @@ pub struct Config {
 
     #[serde(default = "default_db_min_connections")]
     pub db_min_connections: u32,
+
+    pub oidc_issuer: Option<String>,
+    pub oidc_client_id: Option<String>,
+    pub oidc_client_secret: Option<String>,
+    pub oidc_redirect_url: Option<String>,
 }
 
 fn default_secure_cookie() -> bool {
@@ -98,6 +104,11 @@ impl Config {
             .and_then(|s| s.parse().ok())
             .unwrap_or(1);
 
+        let oidc_issuer = env::var("OIDC_ISSUER").ok();
+        let oidc_client_id = env::var("OIDC_CLIENT_ID").ok();
+        let oidc_client_secret = env::var("OIDC_CLIENT_SECRET").ok();
+        let oidc_redirect_url = env::var("OIDC_REDIRECT_URL").ok();
+
         Self {
             host,
             port,
@@ -107,6 +118,10 @@ impl Config {
             secure_cookie,
             db_max_connections,
             db_min_connections,
+            oidc_issuer,
+            oidc_client_id,
+            oidc_client_secret,
+            oidc_redirect_url,
         }
     }
 }

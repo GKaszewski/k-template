@@ -12,13 +12,21 @@ use crate::{
     state::AppState,
 };
 use domain::{DomainError, Email};
+use tower_sessions::Session;
 
 pub fn router() -> Router<AppState> {
-    Router::new()
+    let r = Router::new()
         .route("/login", post(login))
         .route("/register", post(register))
         .route("/logout", post(logout))
-        .route("/me", post(me))
+        .route("/me", post(me));
+
+    #[cfg(feature = "auth-oidc")]
+    let r = r
+        .route("/login/oidc", axum::routing::get(oidc_login))
+        .route("/auth/callback", axum::routing::get(oidc_callback));
+
+    r
 }
 
 async fn login(
@@ -114,4 +122,105 @@ async fn me(auth_session: crate::auth::AuthSession) -> Result<impl IntoResponse,
         email: user.0.email.into_inner(),
         created_at: user.0.created_at,
     }))
+}
+
+#[cfg(feature = "auth-oidc")]
+async fn oidc_login(
+    State(state): State<AppState>,
+    session: Session,
+) -> Result<impl IntoResponse, ApiError> {
+    let service = state
+        .oidc_service
+        .as_ref()
+        .ok_or(ApiError::Internal("OIDC not configured".into()))?;
+
+    let (url, csrf, nonce, pkce) = service.get_authorization_url();
+
+    session
+        .insert("oidc_csrf", csrf)
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    session
+        .insert("oidc_nonce", nonce)
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    session
+        .insert("oidc_pkce", pkce)
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+
+    Ok(axum::response::Redirect::to(&url))
+}
+
+#[cfg(feature = "auth-oidc")]
+#[derive(serde::Deserialize)]
+struct CallbackParams {
+    code: String,
+    state: String,
+}
+
+#[cfg(feature = "auth-oidc")]
+async fn oidc_callback(
+    State(state): State<AppState>,
+    session: Session,
+    mut auth_session: crate::auth::AuthSession,
+    axum::extract::Query(params): axum::extract::Query<CallbackParams>,
+) -> Result<impl IntoResponse, ApiError> {
+    let service = state
+        .oidc_service
+        .as_ref()
+        .ok_or(ApiError::Internal("OIDC not configured".into()))?;
+
+    let stored_csrf: String = session
+        .get("oidc_csrf")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing CSRF token".into()))?;
+
+    if params.state != stored_csrf {
+        return Err(ApiError::Validation("Invalid CSRF token".into()));
+    }
+
+    // 2. Retrieve secrets
+    let stored_pkce: String = session
+        .get("oidc_pkce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing PKCE".into()))?;
+    let stored_nonce: String = session
+        .get("oidc_nonce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?
+        .ok_or(ApiError::Validation("Missing Nonce".into()))?;
+
+    let oidc_user = service
+        .resolve_callback(params.code, stored_nonce, stored_pkce)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    let user = state
+        .user_service
+        .find_or_create(&oidc_user.subject, &oidc_user.email)
+        .await
+        .map_err(|e| ApiError::Internal(e.to_string()))?;
+
+    auth_session
+        .login(&crate::auth::AuthUser(user))
+        .await
+        .map_err(|_| ApiError::Internal("Login failed".into()))?;
+
+    let _: Option<String> = session
+        .remove("oidc_csrf")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    let _: Option<String> = session
+        .remove("oidc_pkce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+    let _: Option<String> = session
+        .remove("oidc_nonce")
+        .await
+        .map_err(|_| ApiError::Internal("Session error".into()))?;
+
+    Ok(axum::response::Redirect::to("/"))
 }

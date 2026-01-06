@@ -5,10 +5,11 @@ edition = "2024"
 default-run = "api"
 
 [features]
-default = ["sqlite", "auth-axum-login"]
+default = ["sqlite", "auth-axum-login", "auth-oidc"]
 sqlite = ["infra/sqlite", "tower-sessions-sqlx-store/sqlite"]
 postgres = ["infra/postgres", "tower-sessions-sqlx-store/postgres"]
 auth-axum-login = ["infra/auth-axum-login"]
+auth-oidc = ["infra/auth-oidc"]
 
 [dependencies]
 k-core = { git = "https://git.gabrielkaszewski.dev/GKaszewski/k-core", features = [
@@ -58,3 +59,4 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 
 dotenvy = "0.15.7"
 config = "0.15.19"
+tower-sessions = "0.14.0"

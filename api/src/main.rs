@@ -49,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let user_repo = build_user_repository(&db_pool).await?;
     let user_service = UserService::new(user_repo.clone());
 
-    let state = AppState::new(user_service, config.clone());
+    let state = AppState::new(user_service, config.clone()).await?;
 
     let session_store = build_session_store(&db_pool)
         .await

@@ -115,3 +115,6 @@ pub mod backend {
         Ok(auth_layer)
     }
 }
+
+#[cfg(feature = "auth-oidc")]
+pub mod oidc;
