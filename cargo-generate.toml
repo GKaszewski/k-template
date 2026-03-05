@@ -1,14 +1,6 @@
 [template]
 cargo_generate_version = ">=0.21.0"
-ignore = [
-    ".git",
-    "target",
-    ".idea",
-    ".vscode",
-    "data.db",
-    "api/Cargo.toml",
-    "infra/Cargo.toml",
-]
+ignore = [".git", "target", ".idea", ".vscode", "data.db"]
 
 [filenames]
 "api/Cargo.toml.template" = "api/Cargo.toml"
