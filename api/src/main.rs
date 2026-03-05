@@ -34,7 +34,23 @@ async fn main() -> anyhow::Result<()> {
 
     // Setup database
     tracing::info!("Connecting to database: {}", config.database_url);
+
+    #[cfg(all(feature = "sqlite", not(feature = "postgres")))]
+    let db_type = k_core::db::DbType::Sqlite;
+
+    #[cfg(all(feature = "postgres", not(feature = "sqlite")))]
+    let db_type = k_core::db::DbType::Postgres;
+
+    // Both features enabled: fall back to URL inspection at runtime
+    #[cfg(all(feature = "sqlite", feature = "postgres"))]
+    let db_type = if config.database_url.starts_with("postgres") {
+        k_core::db::DbType::Postgres
+    } else {
+        k_core::db::DbType::Sqlite
+    };
+
     let db_config = k_core::db::DatabaseConfig {
+        db_type,
         url: config.database_url.clone(),
         max_connections: config.db_max_connections,
         min_connections: config.db_min_connections,
@@ -51,8 +67,6 @@ async fn main() -> anyhow::Result<()> {
 
     let server_config = ServerConfig {
         cors_origins: config.cors_allowed_origins.clone(),
-        // session_secret is unused (sessions removed); kept for k-core API compat
-        session_secret: None,
     };
 
     let app = Router::new()
