@@ -14,7 +14,6 @@ use domain::DomainError;
 
 /// API-level errors
 #[derive(Debug, Error)]
-#[allow(dead_code)] // Some variants are reserved for future use
 pub enum ApiError {
     #[error("{0}")]
     Domain(#[from] DomainError),
@@ -51,11 +50,17 @@ impl IntoResponse for ApiError {
 
                     DomainError::ValidationError(_) => StatusCode::BAD_REQUEST,
 
-                    DomainError::Unauthorized(_) => StatusCode::FORBIDDEN,
+                    // Unauthenticated = not logged in → 401
+                    DomainError::Unauthenticated(_) => StatusCode::UNAUTHORIZED,
+
+                    // Forbidden = not allowed to perform action → 403
+                    DomainError::Forbidden(_) => StatusCode::FORBIDDEN,
 
                     DomainError::RepositoryError(_) | DomainError::InfrastructureError(_) => {
                         StatusCode::INTERNAL_SERVER_ERROR
                     }
+
+                    _ => StatusCode::INTERNAL_SERVER_ERROR,
                 };
 
                 (
@@ -76,7 +81,6 @@ impl IntoResponse for ApiError {
             ),
 
             ApiError::Internal(msg) => {
-                // Log internal errors but don't expose details
                 tracing::error!("Internal error: {}", msg);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -108,7 +112,6 @@ impl IntoResponse for ApiError {
     }
 }
 
-#[allow(dead_code)] // Helper constructors for future use
 impl ApiError {
     pub fn validation(msg: impl Into<String>) -> Self {
         Self::Validation(msg.into())
@@ -120,5 +123,4 @@ impl ApiError {
 }
 
 /// Result type alias for API handlers
-#[allow(dead_code)]
 pub type ApiResult<T> = Result<T, ApiError>;

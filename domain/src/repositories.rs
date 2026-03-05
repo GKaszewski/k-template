@@ -1,5 +1,5 @@
 //! Reference Repository ports (traits)
-//! 
+//!
 //! These traits define the interface for data persistence.
 
 use async_trait::async_trait;

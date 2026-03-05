@@ -57,8 +57,4 @@ impl User {
         }
     }
 
-    /// Helper to get email as string
-    pub fn email_str(&self) -> &str {
-        self.email.as_ref()
-    }
 }

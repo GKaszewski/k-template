@@ -3,18 +3,20 @@
 //! Holds shared state for the application.
 
 use axum::extract::FromRef;
+use axum_extra::extract::cookie::Key;
 #[cfg(feature = "auth-jwt")]
 use infra::auth::jwt::{JwtConfig, JwtValidator};
 #[cfg(feature = "auth-oidc")]
 use infra::auth::oidc::OidcService;
 use std::sync::Arc;
 
-use crate::config::{AuthMode, Config};
+use crate::config::Config;
 use domain::UserService;
 
 #[derive(Clone)]
 pub struct AppState {
     pub user_service: Arc<UserService>,
+    pub cookie_key: Key,
     #[cfg(feature = "auth-oidc")]
     pub oidc_service: Option<Arc<OidcService>>,
     #[cfg(feature = "auth-jwt")]
@@ -24,6 +26,8 @@ pub struct AppState {
 
 impl AppState {
     pub async fn new(user_service: UserService, config: Config) -> anyhow::Result<Self> {
+        let cookie_key = Key::derive_from(config.cookie_secret.as_bytes());
+
         #[cfg(feature = "auth-oidc")]
         let oidc_service = if let (Some(issuer), Some(id), secret, Some(redirect), resource_id) = (
             &config.oidc_issuer,
@@ -34,7 +38,6 @@ impl AppState {
         ) {
             tracing::info!("Initializing OIDC service with issuer: {}", issuer);
 
-            // Construct newtypes from config strings
             let issuer_url = domain::IssuerUrl::new(issuer)
                 .map_err(|e| anyhow::anyhow!("Invalid OIDC issuer URL: {}", e))?;
             let client_id = domain::ClientId::new(id)
@@ -57,25 +60,15 @@ impl AppState {
         };
 
         #[cfg(feature = "auth-jwt")]
-        let jwt_validator = if matches!(config.auth_mode, AuthMode::Jwt | AuthMode::Both) {
-            // Use provided secret or fall back to a development secret
-            let secret = if let Some(ref s) = config.jwt_secret {
-                if s.is_empty() { None } else { Some(s.clone()) }
-            } else {
-                None
-            };
-
-            let secret = match secret {
-                Some(s) => s,
-                None => {
+        let jwt_validator = {
+            let secret = match &config.jwt_secret {
+                Some(s) if !s.is_empty() => s.clone(),
+                _ => {
                     if config.is_production {
-                        anyhow::bail!(
-                            "JWT_SECRET is required when AUTH_MODE is 'jwt' or 'both' in production"
-                        );
+                        anyhow::bail!("JWT_SECRET is required in production");
                     }
-                    // Use a development-only default secret
                     tracing::warn!(
-                        "⚠️  JWT_SECRET not set - using insecure development secret. DO NOT USE IN PRODUCTION!"
+                        "⚠️  JWT_SECRET not set — using insecure development secret. DO NOT USE IN PRODUCTION!"
                     );
                     "k-template-dev-secret-not-for-production-use-only".to_string()
                 }
@@ -90,12 +83,11 @@ impl AppState {
                 config.is_production,
             )?;
             Some(Arc::new(JwtValidator::new(jwt_config)))
-        } else {
-            None
         };
 
         Ok(Self {
             user_service: Arc::new(user_service),
+            cookie_key,
             #[cfg(feature = "auth-oidc")]
             oidc_service,
             #[cfg(feature = "auth-jwt")]
@@ -114,5 +106,11 @@ impl FromRef<AppState> for Arc<UserService> {
 impl FromRef<AppState> for Arc<Config> {
     fn from_ref(input: &AppState) -> Self {
         input.config.clone()
+    }
+}
+
+impl FromRef<AppState> for Key {
+    fn from_ref(input: &AppState) -> Self {
+        input.cookie_key.clone()
     }
 }

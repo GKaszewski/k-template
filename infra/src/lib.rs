@@ -5,9 +5,7 @@
 //!
 //! ## Adapters
 //!
-//! - [`SqliteNoteRepository`] - SQLite adapter for notes with FTS5 search
 //! - [`SqliteUserRepository`] - SQLite adapter for users (OIDC-ready)
-//! - [`SqliteTagRepository`] - SQLite adapter for tags
 //!
 //! ## Database
 //!
@@ -17,7 +15,6 @@
 pub mod auth;
 pub mod db;
 pub mod factory;
-pub mod session_store;
 mod user_repository;
 
 // Re-export for convenience

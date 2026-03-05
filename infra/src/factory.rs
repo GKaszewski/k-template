@@ -5,8 +5,6 @@ use crate::SqliteUserRepository;
 use crate::db::DatabasePool;
 use domain::UserRepository;
 
-use k_core::session::store::InfraSessionStore;
-
 #[derive(Debug, thiserror::Error)]
 pub enum FactoryError {
     #[error("Database error: {0}")]
@@ -32,19 +30,4 @@ pub async fn build_user_repository(pool: &DatabasePool) -> FactoryResult<Arc<dyn
             "No database feature enabled".to_string(),
         )),
     }
-}
-
-pub async fn build_session_store(
-    pool: &DatabasePool,
-) -> FactoryResult<crate::session_store::InfraSessionStore> {
-    Ok(match pool {
-        #[cfg(feature = "sqlite")]
-        DatabasePool::Sqlite(p) => {
-            InfraSessionStore::Sqlite(tower_sessions_sqlx_store::SqliteStore::new(p.clone()))
-        }
-        #[cfg(feature = "postgres")]
-        DatabasePool::Postgres(p) => {
-            InfraSessionStore::Postgres(tower_sessions_sqlx_store::PostgresStore::new(p.clone()))
-        }
-    })
 }

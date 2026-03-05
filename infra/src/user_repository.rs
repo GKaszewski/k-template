@@ -1,27 +1,13 @@
-//! SQLite implementation of UserRepository
+//! SQLite and PostgreSQL implementations of UserRepository
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 use domain::{DomainError, DomainResult, Email, User, UserRepository};
 
-/// SQLite adapter for UserRepository
-#[cfg(feature = "sqlite")]
-#[derive(Clone)]
-pub struct SqliteUserRepository {
-    pool: SqlitePool,
-}
-
-#[cfg(feature = "sqlite")]
-impl SqliteUserRepository {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
-    }
-}
-
-/// Row type for SQLite query results
+/// Row type for database query results (shared between SQLite and PostgreSQL)
 #[derive(Debug, FromRow)]
 struct UserRow {
     id: String,
@@ -46,7 +32,6 @@ impl TryFrom<UserRow> for User {
             })
             .map_err(|e| DomainError::RepositoryError(format!("Invalid datetime: {}", e)))?;
 
-        // Parse email from string - it was validated when originally stored
         let email = Email::try_from(row.email)
             .map_err(|e| DomainError::RepositoryError(format!("Invalid email in DB: {}", e)))?;
 
@@ -57,6 +42,20 @@ impl TryFrom<UserRow> for User {
             row.password_hash,
             created_at,
         ))
+    }
+}
+
+/// SQLite adapter for UserRepository
+#[cfg(feature = "sqlite")]
+#[derive(Clone)]
+pub struct SqliteUserRepository {
+    pool: sqlx::SqlitePool,
+}
+
+#[cfg(feature = "sqlite")]
+impl SqliteUserRepository {
+    pub fn new(pool: sqlx::SqlitePool) -> Self {
+        Self { pool }
     }
 }
 
@@ -116,12 +115,20 @@ impl UserRepository for SqliteUserRepository {
         )
         .bind(&id)
         .bind(&user.subject)
-        .bind(user.email.as_ref()) // Use .as_ref() to get the inner &str
+        .bind(user.email.as_ref())
         .bind(&user.password_hash)
         .bind(&created_at)
         .execute(&self.pool)
         .await
-        .map_err(|e| DomainError::RepositoryError(e.to_string()))?;
+        .map_err(|e| {
+            // Surface UNIQUE constraint violations as domain-level conflicts
+            let msg = e.to_string();
+            if msg.contains("UNIQUE constraint failed") || msg.contains("unique constraint") {
+                DomainError::UserAlreadyExists(user.email.as_ref().to_string())
+            } else {
+                DomainError::RepositoryError(msg)
+            }
+        })?;
 
         Ok(())
     }
@@ -144,7 +151,7 @@ mod tests {
     use crate::db::run_migrations;
     use k_core::db::{DatabaseConfig, DatabasePool, connect};
 
-    async fn setup_test_db() -> SqlitePool {
+    async fn setup_test_db() -> sqlx::SqlitePool {
         let config = DatabaseConfig::default();
         let db_pool = connect(&config).await.expect("Failed to create pool");
 
@@ -168,7 +175,7 @@ mod tests {
         assert!(found.is_some());
         let found = found.unwrap();
         assert_eq!(found.subject, "oidc|123");
-        assert_eq!(found.email_str(), "test@example.com");
+        assert_eq!(found.email.as_ref(), "test@example.com");
         assert!(found.password_hash.is_none());
     }
 
@@ -184,7 +191,7 @@ mod tests {
         let found = repo.find_by_id(user.id).await.unwrap();
         assert!(found.is_some());
         let found = found.unwrap();
-        assert_eq!(found.email_str(), "local@example.com");
+        assert_eq!(found.email.as_ref(), "local@example.com");
         assert_eq!(found.password_hash, Some("hashed_pw".to_string()));
     }
 
@@ -292,7 +299,14 @@ impl UserRepository for PostgresUserRepository {
         .bind(&created_at)
         .execute(&self.pool)
         .await
-        .map_err(|e| DomainError::RepositoryError(e.to_string()))?;
+        .map_err(|e| {
+            let msg = e.to_string();
+            if msg.contains("unique constraint") || msg.contains("duplicate key") {
+                DomainError::UserAlreadyExists(user.email.as_ref().to_string())
+            } else {
+                DomainError::RepositoryError(msg)
+            }
+        })?;
 
         Ok(())
     }

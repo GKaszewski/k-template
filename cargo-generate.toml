@@ -24,11 +24,6 @@ prompt = "Database type"
 choices = ["sqlite", "postgres"]
 default = "sqlite"
 
-[placeholders.auth_session]
-type = "bool"
-prompt = "Enable session-based authentication (cookies)?"
-default = true
-
 [placeholders.auth_jwt]
 type = "bool"
 prompt = "Enable JWT authentication (Bearer tokens)?"

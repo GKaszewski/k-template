@@ -17,6 +17,7 @@ pub type UserId = Uuid;
 
 /// Errors that occur when parsing/validating value objects
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ValidationError {
     #[error("Invalid email format: {0}")]
     InvalidEmail(String),
@@ -109,8 +110,8 @@ impl<'de> Deserialize<'de> for Email {
 #[derive(Clone, PartialEq, Eq)]
 pub struct Password(String);
 
-/// Minimum password length
-pub const MIN_PASSWORD_LENGTH: usize = 6;
+/// Minimum password length (NIST recommendation)
+pub const MIN_PASSWORD_LENGTH: usize = 8;
 
 impl Password {
     pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
@@ -497,82 +498,6 @@ pub struct AuthorizationUrlData {
 // Configuration Newtypes
 // ============================================================================
 
-/// Database connection URL
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-pub struct DatabaseUrl(String);
-
-impl DatabaseUrl {
-    pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
-        let value = value.into();
-        if value.trim().is_empty() {
-            return Err(ValidationError::Empty("database_url".to_string()));
-        }
-        Ok(Self(value))
-    }
-}
-
-impl AsRef<str> for DatabaseUrl {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for DatabaseUrl {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl TryFrom<String> for DatabaseUrl {
-    type Error = ValidationError;
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        Self::new(value)
-    }
-}
-
-impl From<DatabaseUrl> for String {
-    fn from(val: DatabaseUrl) -> Self {
-        val.0
-    }
-}
-
-/// Session secret with minimum length requirement
-pub const MIN_SESSION_SECRET_LENGTH: usize = 64;
-
-#[derive(Clone, PartialEq, Eq)]
-pub struct SessionSecret(String);
-
-impl SessionSecret {
-    pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
-        let value = value.into();
-        if value.len() < MIN_SESSION_SECRET_LENGTH {
-            return Err(ValidationError::SecretTooShort {
-                min: MIN_SESSION_SECRET_LENGTH,
-                actual: value.len(),
-            });
-        }
-        Ok(Self(value))
-    }
-
-    /// Create without validation (for development/testing)
-    pub fn new_unchecked(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-}
-
-impl AsRef<str> for SessionSecret {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Debug for SessionSecret {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SessionSecret(***)")
-    }
-}
-
 /// JWT signing secret with minimum length requirement
 pub const MIN_JWT_SECRET_LENGTH: usize = 32;
 
@@ -655,12 +580,12 @@ mod tests {
         #[test]
         fn test_valid_password() {
             assert!(Password::new("secret123").is_ok());
-            assert!(Password::new("123456").is_ok()); // Exactly 6 chars
+            assert!(Password::new("12345678").is_ok()); // Exactly 8 chars
         }
 
         #[test]
         fn test_password_too_short() {
-            assert!(Password::new("12345").is_err()); // 5 chars
+            assert!(Password::new("1234567").is_err()); // 7 chars
             assert!(Password::new("").is_err());
         }
 
@@ -706,15 +631,6 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_session_secret_min_length() {
-            let short = "short";
-            let long = "a".repeat(64);
-
-            assert!(SessionSecret::new(short).is_err());
-            assert!(SessionSecret::new(long).is_ok());
-        }
-
-        #[test]
         fn test_jwt_secret_production_check() {
             let short = "short";
             let long = "a".repeat(32);
@@ -729,10 +645,7 @@ mod tests {
 
         #[test]
         fn test_secrets_hide_in_debug() {
-            let session = SessionSecret::new_unchecked("secret");
             let jwt = JwtSecret::new_unchecked("secret");
-
-            assert!(!format!("{:?}", session).contains("secret"));
             assert!(!format!("{:?}", jwt).contains("secret"));
         }
     }

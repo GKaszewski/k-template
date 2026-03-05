@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 /// Domain-level errors for K-Notes operations
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum DomainError {
     /// The requested user was not found
     #[error("User not found: {0}")]
@@ -22,9 +23,13 @@ pub enum DomainError {
     #[error("Validation error: {0}")]
     ValidationError(String),
 
-    /// User is not authorized to perform this action
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
+    /// User is not authenticated (maps to HTTP 401)
+    #[error("Unauthenticated: {0}")]
+    Unauthenticated(String),
+
+    /// User is not allowed to perform this action (maps to HTTP 403)
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
 
     /// A repository/infrastructure error occurred
     #[error("Repository error: {0}")]
@@ -41,9 +46,14 @@ impl DomainError {
         Self::ValidationError(message.into())
     }
 
-    /// Create an unauthorized error
-    pub fn unauthorized(message: impl Into<String>) -> Self {
-        Self::Unauthorized(message.into())
+    /// Create an unauthenticated error (not logged in → 401)
+    pub fn unauthenticated(message: impl Into<String>) -> Self {
+        Self::Unauthenticated(message.into())
+    }
+
+    /// Create a forbidden error (not allowed → 403)
+    pub fn forbidden(message: impl Into<String>) -> Self {
+        Self::Forbidden(message.into())
     }
 
     /// Check if this error indicates a "not found" condition

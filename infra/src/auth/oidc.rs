@@ -15,6 +15,7 @@ use openidconnect::{
     },
     reqwest,
 };
+use serde::{Deserialize, Serialize};
 
 pub type OidcClient = Client<
     EmptyAdditionalClaims,
@@ -36,9 +37,18 @@ pub type OidcClient = Client<
     EndpointMaybeSet, // HasUserInfoUrl (Discovered, might be missing)
 >;
 
+/// Serializable OIDC state stored in an encrypted cookie during the auth code flow
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OidcState {
+    pub csrf_token: CsrfToken,
+    pub nonce: OidcNonce,
+    pub pkce_verifier: PkceVerifier,
+}
+
 #[derive(Clone)]
 pub struct OidcService {
     client: OidcClient,
+    http_client: reqwest::Client,
     resource_id: Option<ResourceId>,
 }
 
@@ -61,11 +71,7 @@ impl OidcService {
         tracing::debug!("🔵 OIDC Setup: Redirect  = '{}'", redirect_url);
         tracing::debug!(
             "🔵 OIDC Setup: Secret    = {:?}",
-            if client_secret.is_some() {
-                "SET"
-            } else {
-                "NONE"
-            }
+            if client_secret.is_some() { "SET" } else { "NONE" }
         );
 
         let http_client = reqwest::ClientBuilder::new()
@@ -78,13 +84,13 @@ impl OidcService {
         )
         .await?;
 
-        // Convert to openidconnect types
         let oidc_client_id = openidconnect::ClientId::new(client_id.as_ref().to_string());
         let oidc_client_secret = client_secret
             .as_ref()
             .filter(|s| !s.is_empty())
             .map(|s| openidconnect::ClientSecret::new(s.as_ref().to_string()));
-        let oidc_redirect_url = openidconnect::RedirectUrl::new(redirect_url.as_ref().to_string())?;
+        let oidc_redirect_url =
+            openidconnect::RedirectUrl::new(redirect_url.as_ref().to_string())?;
 
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
@@ -95,14 +101,16 @@ impl OidcService {
 
         Ok(Self {
             client,
+            http_client,
             resource_id,
         })
     }
 
-    /// Get the authorization URL and associated state for OIDC login
+    /// Get the authorization URL and associated state for OIDC login.
     ///
-    /// Returns structured data instead of a raw tuple for better type safety
-    pub fn get_authorization_url(&self) -> AuthorizationUrlData {
+    /// Returns `(AuthorizationUrlData, OidcState)` where `OidcState` should be
+    /// serialized and stored in an encrypted cookie for the duration of the flow.
+    pub fn get_authorization_url(&self) -> (AuthorizationUrlData, OidcState) {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         let (auth_url, csrf_token, nonce) = self
@@ -117,12 +125,20 @@ impl OidcService {
             .set_pkce_challenge(pkce_challenge)
             .url();
 
-        AuthorizationUrlData {
-            url: auth_url.into(),
+        let oidc_state = OidcState {
             csrf_token: CsrfToken::new(csrf_token.secret().to_string()),
             nonce: OidcNonce::new(nonce.secret().to_string()),
             pkce_verifier: PkceVerifier::new(pkce_verifier.secret().to_string()),
-        }
+        };
+
+        let auth_data = AuthorizationUrlData {
+            url: auth_url.into(),
+            csrf_token: oidc_state.csrf_token.clone(),
+            nonce: oidc_state.nonce.clone(),
+            pkce_verifier: oidc_state.pkce_verifier.clone(),
+        };
+
+        (auth_data, oidc_state)
     }
 
     /// Resolve the OIDC callback with type-safe parameters
@@ -132,10 +148,6 @@ impl OidcService {
         nonce: OidcNonce,
         pkce_verifier: PkceVerifier,
     ) -> anyhow::Result<OidcUser> {
-        let http_client = reqwest::ClientBuilder::new()
-            .redirect(reqwest::redirect::Policy::none())
-            .build()?;
-
         let oidc_pkce_verifier =
             openidconnect::PkceCodeVerifier::new(pkce_verifier.as_ref().to_string());
         let oidc_nonce = openidconnect::Nonce::new(nonce.as_ref().to_string());
@@ -146,7 +158,7 @@ impl OidcService {
                 code.as_ref().to_string(),
             ))?
             .set_pkce_verifier(oidc_pkce_verifier)
-            .request_async(&http_client)
+            .request_async(&self.http_client)
             .await?;
 
         let id_token = token_response
@@ -178,19 +190,17 @@ impl OidcService {
         let email = if let Some(email) = claims.email() {
             Some(email.as_str().to_string())
         } else {
-            // Fallback: Call UserInfo Endpoint using the Access Token
             tracing::debug!("🔵 Email missing in ID Token, fetching UserInfo...");
 
             let user_info: UserInfoClaims<EmptyAdditionalClaims, CoreGenderClaim> = self
                 .client
                 .user_info(token_response.access_token().clone(), None)?
-                .request_async(&http_client)
+                .request_async(&self.http_client)
                 .await?;
 
             user_info.email().map(|e| e.as_str().to_string())
         };
 
-        // If email is still missing, we must error out because your app requires valid emails
         let email =
             email.ok_or_else(|| anyhow!("User has no verified email address in ZITADEL"))?;
 
