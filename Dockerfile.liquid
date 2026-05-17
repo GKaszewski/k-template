@@ -4,18 +4,17 @@ FROM rust:slim-bookworm AS builder
 WORKDIR /build
 
 # Copy manifests + lockfile first so cargo can fetch deps as a cached layer.
-# Source changes below won't invalidate this layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates/domain/Cargo.toml              crates/domain/Cargo.toml
 COPY crates/application/Cargo.toml         crates/application/Cargo.toml
 COPY crates/api-types/Cargo.toml           crates/api-types/Cargo.toml
-COPY crates/adapters/sqlite/Cargo.toml     crates/adapters/sqlite/Cargo.toml
-COPY crates/adapters/postgres/Cargo.toml   crates/adapters/postgres/Cargo.toml
-COPY crates/adapters/auth/Cargo.toml       crates/adapters/auth/Cargo.toml
+{% if database == "sqlite" %}COPY crates/adapters/sqlite/Cargo.toml     crates/adapters/sqlite/Cargo.toml
+{% endif %}{% if database == "postgres" %}COPY crates/adapters/postgres/Cargo.toml   crates/adapters/postgres/Cargo.toml
+{% endif %}COPY crates/adapters/auth/Cargo.toml       crates/adapters/auth/Cargo.toml
 COPY crates/presentation/Cargo.toml        crates/presentation/Cargo.toml
 COPY crates/bootstrap/Cargo.toml           crates/bootstrap/Cargo.toml
-COPY crates/worker/Cargo.toml              crates/worker/Cargo.toml
-
+{% if worker %}COPY crates/worker/Cargo.toml              crates/worker/Cargo.toml
+{% endif %}
 # Stub every crate so cargo can resolve and fetch deps without real source
 RUN find crates -name "Cargo.toml" | sed 's|/Cargo.toml||' | \
     xargs -I{} sh -c 'mkdir -p {}/src && echo "fn main(){}" > {}/src/main.rs && printf "" > {}/src/lib.rs'
@@ -26,14 +25,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN cargo fetch
 
-# Copy sqlx offline query cache — no live database needed at compile time
-COPY crates/adapters/sqlite/.sqlx ./crates/adapters/sqlite/.sqlx
+# For sqlx compile-time query verification run `cargo sqlx prepare` locally first,
+# then commit the .sqlx/ cache. Or pass DATABASE_URL as a build arg:
+#   docker build --build-arg DATABASE_URL=<url> .
+ARG DATABASE_URL
+ENV SQLX_OFFLINE=${DATABASE_URL:+false}
+ENV SQLX_OFFLINE=${SQLX_OFFLINE:-true}
 
 # Now copy real source — only invalidates cache on source changes
 COPY crates ./crates
 
-ENV SQLX_OFFLINE=true
-RUN cargo build --release -p bootstrap -p worker
+RUN cargo build --release -p bootstrap{% if worker %} -p worker{% endif %}
 
 # ----- runtime -----
 FROM debian:bookworm-slim
@@ -44,11 +46,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY --from=builder /build/target/release/server  ./server
-COPY --from=builder /build/target/release/worker  ./worker
-
+COPY --from=builder /build/target/release/{{project_name}} ./server
+{% if worker %}COPY --from=builder /build/target/release/{{project_name}}-worker ./worker
+{% endif %}
 EXPOSE 3000
 
-ENV RUST_LOG=bootstrap=info,tower_http=info
+ENV RUST_LOG={{project_name}}=info,tower_http=info
 
 CMD ["./server"]

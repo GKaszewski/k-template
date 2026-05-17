@@ -1,6 +1,6 @@
 [template]
 cargo_generate_version = ">=0.21.0"
-ignore = [".git", "target", ".idea", ".vscode", "data.db", "*.liquid", "**/.sqlx", "**/dev.db"]
+ignore = [".git", "target", ".idea", ".vscode", "data.db", "*.liquid", "**/.sqlx", "**/dev.db", "Dockerfile", "compose.yml"]
 
 [placeholders.project_name]
 type = "string"

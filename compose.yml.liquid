@@ -1,0 +1,57 @@
+services:
+{% if database == "postgres" %}  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: {{project_name}}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+{% endif %}  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+{% if database == "sqlite" %}      DATABASE_URL: sqlite:///data/app.db
+{% endif %}{% if database == "postgres" %}      DATABASE_URL: postgres://postgres:postgres@postgres:5432/{{project_name}}
+{% endif %}      JWT_SECRET: change-me-in-production-min-32-chars
+      HOST: 0.0.0.0
+      PORT: "3000"
+      RUST_LOG: {{project_name}}=info,tower_http=info
+{% if database == "sqlite" %}    volumes:
+      - db_data:/data
+{% endif %}{% if database == "postgres" %}    depends_on:
+      postgres:
+        condition: service_healthy
+{% endif %}    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+{% if worker %}
+  worker:
+    build: .
+    entrypoint: ["./worker"]
+    environment:
+{% if database == "sqlite" %}      DATABASE_URL: sqlite:///data/app.db
+{% endif %}{% if database == "postgres" %}      DATABASE_URL: postgres://postgres:postgres@postgres:5432/{{project_name}}
+{% endif %}      RUST_LOG: worker=info
+{% if database == "sqlite" %}    volumes:
+      - db_data:/data
+{% endif %}{% if database == "postgres" %}    depends_on:
+      postgres:
+        condition: service_healthy
+{% endif %}
+{% endif %}volumes:
+{% if database == "sqlite" %}  db_data:
+{% endif %}{% if database == "postgres" %}  postgres_data:
+{% endif %}
