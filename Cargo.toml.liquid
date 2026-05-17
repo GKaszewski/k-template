@@ -3,12 +3,12 @@ members = [
     "crates/domain",
     "crates/application",
     "crates/api-types",
-    "crates/adapters/sqlite",
-    "crates/adapters/postgres",
+    {% if database == "sqlite" %}"crates/adapters/sqlite",{% endif %}
+    {% if database == "postgres" %}"crates/adapters/postgres",{% endif %}
     "crates/adapters/auth",
     "crates/presentation",
     "crates/bootstrap",
-    "crates/worker",
+    {% if worker %}"crates/worker",{% endif %}
 ]
 resolver = "2"
 
