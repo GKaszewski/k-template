@@ -1,0 +1,12 @@
+[package]
+name = "adapters-postgres"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain      = { workspace = true }
+sqlx        = { workspace = true, features = ["postgres"] }
+uuid        = { workspace = true }
+chrono      = { workspace = true }
+anyhow      = { workspace = true }
+async-trait = { workspace = true }
