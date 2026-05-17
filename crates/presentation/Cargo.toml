@@ -1,0 +1,19 @@
+[package]
+name = "presentation"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain        = { workspace = true }
+application   = { workspace = true }
+api-types     = { path = "../api-types" }
+axum          = { workspace = true }
+tower-http    = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+uuid          = { workspace = true }
+chrono        = { workspace = true }
+tracing       = { workspace = true }
+async-trait   = { workspace = true }
+utoipa        = { workspace = true }
+utoipa-scalar = { workspace = true }
