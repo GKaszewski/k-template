@@ -1,89 +1,14 @@
 services:
-  backend:
+  app:
     build: .
     ports:
       - "3000:3000"
     environment:
-      - SESSION_SECRET=dev_secret_key_12345
-      - DATABASE_URL=sqlite:///app/data/notes.db
-      - CORS_ALLOWED_ORIGINS=http://localhost:8080,http://localhost:5173
-      - HOST=0.0.0.0
-      - PORT=3000
-      - DB_MAX_CONNECTIONS=5
-      - DB_MIN_CONNECTIONS=1
-      - SECURE_COOKIE=true
+      DATABASE_URL: sqlite:///data/app.db
+      JWT_SECRET: change-me-in-production
+      RUST_LOG: info
     volumes:
-      - ./data:/app/data
-
-  # nats:
-  #   image: nats:alpine
-  #   ports:
-  #     - "4222:4222"
-  #     - "6222:6222"
-  #     - "8222:8222"
-  #   restart: unless-stopped
-
-  db:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: k_template_db
-    ports:
-      - "5439:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
-  zitadel-db:
-    image: postgres:16-alpine
-    container_name: zitadel_db
-    environment:
-      POSTGRES_USER: zitadel
-      POSTGRES_PASSWORD: zitadel_password
-      POSTGRES_DB: zitadel
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U zitadel -d zitadel"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    volumes:
-      - zitadel_db_data:/var/lib/postgresql/data
-
-  zitadel:
-    image: ghcr.io/zitadel/zitadel:latest
-    container_name: zitadel_local
-    depends_on:
-      zitadel-db:
-        condition: service_healthy
-    ports:
-      - "8086:8080"
-    # USE start-from-init (Fixes the "relation does not exist" bug)
-    command: 'start-from-init --masterkey "MasterkeyNeedsToBeExactly32Bytes"'
-    environment:
-      # Database Connection
-      ZITADEL_DATABASE_POSTGRES_HOST: zitadel-db
-      ZITADEL_DATABASE_POSTGRES_PORT: 5432
-      ZITADEL_DATABASE_POSTGRES_DATABASE: zitadel
-      
-      # APPLICATION USER (Zitadel uses this to run)
-      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: zitadel_password
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
-      
-      # ADMIN USER (Zitadel uses this to create tables/migrations)
-      # We use 'zitadel' because it is the owner of the DB in your postgres container.
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: zitadel
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: zitadel_password
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
-
-      # General Config
-      ZITADEL_EXTERNALDOMAIN: localhost
-      ZITADEL_EXTERNALPORT: 8086
-      ZITADEL_EXTERNALSECURE: "false"
-      ZITADEL_TLS_ENABLED: "false"
-
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
+      - db_data:/data
 
 volumes:
   db_data:
-  zitadel_db_data:

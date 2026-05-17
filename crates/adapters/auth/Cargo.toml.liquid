@@ -1,0 +1,19 @@
+[package]
+name = "adapters-auth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain       = { workspace = true }
+async-trait  = { workspace = true }
+anyhow       = { workspace = true }
+jsonwebtoken = { workspace = true }
+bcrypt       = { workspace = true }
+serde        = { workspace = true }
+uuid         = { workspace = true }
+chrono       = { workspace = true }
+tokio        = { workspace = true }
+{% if auth_oidc %}
+openidconnect = "3"
+reqwest       = { version = "0.12", features = ["json"] }
+{% endif %}

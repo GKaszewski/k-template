@@ -1,33 +1,35 @@
 [template]
 cargo_generate_version = ">=0.21.0"
-ignore = [".git", "target", ".idea", ".vscode", "data.db"]
-
-[filenames]
-"api/Cargo.toml.template" = "api/Cargo.toml"
-"infra/Cargo.toml.template" = "infra/Cargo.toml"
+ignore = [".git", "target", ".idea", ".vscode", "data.db", "*.liquid", "**/.sqlx", "**/dev.db"]
 
 [placeholders.project_name]
 type = "string"
-prompt = "Project name"
+prompt = "Project name (snake_case)"
 
 [placeholders.database]
 type = "string"
-prompt = "Database type"
+prompt = "Database backend"
 choices = ["sqlite", "postgres"]
 default = "sqlite"
 
-[placeholders.auth_jwt]
+[placeholders.worker]
 type = "bool"
-prompt = "Enable JWT authentication (Bearer tokens)?"
-default = true
+prompt = "Include background worker binary?"
+default = false
 
 [placeholders.auth_oidc]
 type = "bool"
-prompt = "Enable OIDC integration (Login with Google, etc.)?"
-default = true
+prompt = "Include OIDC/OAuth2 adapter stub?"
+default = false
 
 [conditional.'database == "sqlite"']
-ignore = ["migrations_postgres"]
+ignore = ["crates/adapters/postgres"]
 
 [conditional.'database == "postgres"']
-ignore = ["migrations_sqlite"]
+ignore = ["crates/adapters/sqlite"]
+
+[conditional.'!worker']
+ignore = ["crates/worker"]
+
+[conditional.'!auth_oidc']
+ignore = ["crates/adapters/auth/src/oidc.rs"]
