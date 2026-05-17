@@ -1,208 +1,136 @@
 # k-template
 
-A production-ready, modular Rust API template for K-Suite applications, following Hexagonal Architecture principles.
+A cargo-generate template for personal Rust web services. Gives you auth, persistence, logging, CORS, and API docs out of the box so you can start writing domain code immediately.
 
-## Features
+Follows the same hexagonal/ports-and-adapters architecture used in [thoughts](https://git.gabrielkaszewski.dev/GKaszewski/thoughts) and [movies-diary](https://git.gabrielkaszewski.dev/GKaszewski/movies-diary).
 
-- **Hexagonal Architecture**: Clear separation between Domain, Infrastructure, and API layers
-- **JWT-Only Authentication**: Stateless Bearer token auth — no server-side sessions
-- **OIDC Integration**: Connect to any OpenID Connect provider (Keycloak, Auth0, Zitadel, etc.) with stateless cookie-based flow state
-- **Database Flexibility**: SQLite (default) or PostgreSQL via feature flags
-- **Type-Safe Domain**: Newtypes with built-in validation for emails, passwords, secrets, and OIDC values
-- **Cargo Generate Ready**: Pre-configured for scaffolding new services
+## What you get
 
-## Quick Start
+- **Full hexagonal architecture** — `domain` → `application` → `adapters` → `presentation` → `bootstrap`, each as a separate crate with clear boundaries
+- **JWT auth wired end-to-end** — register, login, and `GET /auth/me` working from day one
+- **SQLite or PostgreSQL** — chosen at generation time, migrations included
+- **CORS + structured logging** — tower-http middleware configured in bootstrap
+- **Scalar API docs** at `/scalar`, OpenAPI JSON at `/api-docs/openapi.json`
+- **Optional worker binary** — tokio-based background job runner with an example job
+- **Optional OIDC stub** — placeholder adapter for OAuth2/OpenID Connect flows
+- **Docker-ready** — multi-stage Dockerfile with dependency layer caching, no live DB needed at build time
 
-### Option 1: Use cargo-generate (Recommended)
+## Generate a new project
 
 ```bash
-cargo generate --git https://github.com/GKaszewski/k-template.git
+cargo generate --git https://git.gabrielkaszewski.dev/GKaszewski/k-template.git
 ```
 
-You'll be prompted to choose:
-- **Project name**: Your new service name
-- **Database**: `sqlite` or `postgres`
-- **JWT auth**: Enable Bearer token authentication
-- **OIDC**: Enable OpenID Connect integration
+You'll be prompted for:
 
-### Option 2: Clone directly
+| Option | Choices | Default |
+|--------|---------|---------|
+| `project_name` | any snake_case string | — |
+| `database` | `sqlite`, `postgres` | `sqlite` |
+| `worker` | bool | false |
+| `auth_oidc` | bool | false |
+
+## Generated project structure
+
+```
+crates/
+  domain/               pure Rust — entities, value objects, port traits, errors
+  application/          use cases (RegisterUser, LoginUser, GetProfile) + test fakes
+  api-types/            shared request/response DTOs with OpenAPI derives
+  adapters/
+    sqlite/             sqlx SQLite UserRepository + migrations
+    postgres/           sqlx PostgreSQL UserRepository + migrations
+    auth/               BcryptPasswordHasher, JwtTokenIssuer, OidcAdapter stub
+  presentation/         axum handlers, JwtClaims extractor, routes, Scalar mount
+  bootstrap/            Config from env, factory wiring, main entry point
+  worker/               (optional) Job trait, JobRunner, ExampleJob, WorkerConfig
+```
+
+## Running locally
 
 ```bash
-git clone https://github.com/GKaszewski/k-template.git my-api
-cd my-api
 cp .env.example .env
-# Edit .env with your configuration
-cargo run
+cargo run -p bootstrap
 ```
 
-The API will be available at `http://localhost:3000/api/v1/`.
+The server starts at `http://localhost:3000`.
 
-## Configuration
+## Endpoints (out of the box)
 
-All configuration is done via environment variables. See [.env.example](.env.example) for all options.
-
-### Key Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:data.db?mode=rwc` | Database connection string |
-| `COOKIE_SECRET` | *(insecure dev default)* | Secret for encrypting OIDC state cookie (≥64 bytes in production) |
-| `JWT_SECRET` | *(insecure dev default)* | Secret for signing JWT tokens (≥32 bytes in production) |
-| `JWT_EXPIRY_HOURS` | `24` | Token lifetime in hours |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed origins |
-| `SECURE_COOKIE` | `false` | Set `true` when serving over HTTPS |
-| `PRODUCTION` | `false` | Enforces minimum secret lengths |
-
-### OIDC Integration
-
-To enable "Login with Google/Keycloak/etc.":
-
-1. Enable the `auth-oidc` feature (on by default in cargo-generate)
-2. Set these environment variables:
-   ```env
-   OIDC_ISSUER=https://your-provider.com
-   OIDC_CLIENT_ID=your-client-id
-   OIDC_CLIENT_SECRET=your-secret
-   OIDC_REDIRECT_URL=http://localhost:3000/api/v1/auth/callback
-   ```
-3. Users start the flow at `GET /api/v1/auth/login/oidc`
-
-OIDC state (CSRF token, PKCE verifier, nonce) is stored in a short-lived encrypted cookie — no database session table required.
-
-## Feature Flags
-
-```toml
-[features]
-default = ["sqlite", "auth-jwt"]
-```
-
-| Feature | Description |
-|---------|-------------|
-| `sqlite` | SQLite database (default) |
-| `postgres` | PostgreSQL database |
-| `auth-jwt` | JWT Bearer token authentication |
-| `auth-oidc` | OpenID Connect integration |
-
-### Common Configurations
-
-**JWT-only (minimal, default)**:
-```toml
-default = ["sqlite", "auth-jwt"]
-```
-
-**OIDC + JWT (typical SPA backend)**:
-```toml
-default = ["sqlite", "auth-oidc", "auth-jwt"]
-```
-
-**PostgreSQL + OIDC + JWT**:
-```toml
-default = ["postgres", "auth-oidc", "auth-jwt"]
-```
-
-## API Endpoints
-
-### Authentication
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/api/v1/auth/register` | — | Register with email + password → JWT |
-| `POST` | `/api/v1/auth/login` | — | Login with email + password → JWT |
-| `POST` | `/api/v1/auth/logout` | — | Returns 200; client drops the token |
-| `GET` | `/api/v1/auth/me` | Bearer | Current user info |
-| `POST` | `/api/v1/auth/token` | Bearer | Issue a fresh JWT (`auth-jwt`) |
-| `GET` | `/api/v1/auth/login/oidc` | — | Start OIDC flow, sets encrypted state cookie (`auth-oidc`) |
-| `GET` | `/api/v1/auth/callback` | — | Complete OIDC flow → JWT, clears cookie (`auth-oidc`) |
-
-### Example: Register and use a token
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/v1/auth/register` | — | Create account → `AuthResponse` |
+| `POST` | `/api/v1/auth/login` | — | Login → `AuthResponse` |
+| `GET`  | `/api/v1/auth/me` | Bearer | Current user profile |
+| `GET`  | `/health` | — | `{"status":"ok"}` |
+| `GET`  | `/scalar` | — | Interactive API docs |
+| `GET`  | `/api-docs/openapi.json` | — | OpenAPI spec |
 
 ```bash
 # Register
-curl -X POST http://localhost:3000/api/v1/auth/register \
+curl -s -X POST http://localhost:3000/api/v1/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com", "password": "mypassword"}'
-# → {"access_token": "eyJ...", "token_type": "Bearer", "expires_in": 86400}
+  -d '{"email":"me@example.com","password":"password123"}' | jq
 
-# Use the token
-curl http://localhost:3000/api/v1/auth/me \
-  -H "Authorization: Bearer eyJ..."
+# Login and get token
+TOKEN=$(curl -s -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"me@example.com","password":"password123"}' | jq -r '.token')
+
+# Profile
+curl -s http://localhost:3000/api/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-## Project Structure
+## Configuration
 
-```
-k-template/
-├── domain/          # Pure business logic — zero I/O dependencies
-│   └── src/
-│       ├── entities.rs       # User entity
-│       ├── value_objects.rs  # Email, Password, JwtSecret, OIDC newtypes
-│       ├── repositories.rs   # Repository interfaces (ports)
-│       ├── services.rs       # Domain services
-│       └── errors.rs         # DomainError (Unauthenticated 401, Forbidden 403, …)
-│
-├── infra/           # Infrastructure adapters
-│   └── src/
-│       ├── auth/
-│       │   ├── jwt.rs        # JwtValidator — create + verify tokens
-│       │   └── oidc.rs       # OidcService + OidcState (cookie-serializable)
-│       ├── user_repository.rs # SQLite / PostgreSQL adapter
-│       ├── db.rs             # DatabasePool re-export
-│       └── factory.rs        # build_user_repository()
-│
-├── api/             # HTTP layer
-│   └── src/
-│       ├── routes/
-│       │   ├── auth.rs       # Login, register, logout, me, OIDC flow
-│       │   └── config.rs     # /config endpoint
-│       ├── config.rs         # Config::from_env()
-│       ├── state.rs          # AppState (user_service, cookie_key, jwt_validator, …)
-│       ├── extractors.rs     # CurrentUser (JWT Bearer extractor)
-│       ├── error.rs          # ApiError → HTTP status mapping
-│       └── dto.rs            # LoginRequest, RegisterRequest, TokenResponse, …
-│
-├── migrations_sqlite/
-├── migrations_postgres/
-├── .env.example
-└── compose.yml      # Docker Compose for local dev
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite://data.db` | Database connection string |
+| `JWT_SECRET` | *(required)* | Signing secret — min 32 chars in production |
+| `HOST` | `0.0.0.0` | Bind address |
+| `PORT` | `3000` | Listen port |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Comma-separated allowed origins |
 
-## Development
-
-### Running Tests
+## Tests
 
 ```bash
-# All tests
-cargo test
-
-# Domain only
-cargo test -p domain
-
-# Infra only (SQLite integration tests)
-cargo test -p infra
+# Unit tests (no DB required)
+cargo test -p domain -p application -p adapters-auth
 ```
 
-### Database Migrations
+13 unit tests cover email validation, use case logic (register/login/get_profile), bcrypt roundtrip, and JWT encode/verify.
+
+## Docker
 
 ```bash
-# SQLite
-sqlx migrate run --source migrations_sqlite
+# Build
+docker build -t my-app .
 
-# PostgreSQL
-sqlx migrate run --source migrations_postgres
+# Run
+docker run -p 3000:3000 \
+  -e DATABASE_URL=sqlite:///data/app.db \
+  -e JWT_SECRET=change-me-32-chars-minimum-here \
+  my-app
 ```
 
-### Building with specific features
+Or with compose:
 
 ```bash
-# Minimal: SQLite + JWT only
-cargo build -F sqlite,auth-jwt
-
-# Full: SQLite + JWT + OIDC
-cargo build -F sqlite,auth-jwt,auth-oidc
-
-# PostgreSQL variant
-cargo build --no-default-features -F postgres,auth-jwt,auth-oidc
+docker compose up
 ```
+
+The Dockerfile uses dependency layer caching (manifests copied and fetched before source) so rebuilds after source-only changes are fast. No live database is needed at compile time — the `.sqlx` offline cache is committed.
+
+## What to do after generating
+
+1. Add your domain entities and value objects to `crates/domain/`
+2. Write use cases in `crates/application/`
+3. Add DB columns/tables via new migration files in `crates/adapters/sqlite/migrations/`
+4. Add handlers in `crates/presentation/src/handlers/`
+5. Wire new use cases in `crates/bootstrap/src/factory.rs`
+
+Auth, CORS, logging, and docs are already done — focus on what makes your project unique.
 
 ## License
 
