@@ -11,6 +11,15 @@ path = "src/main.rs"
 domain          = { workspace = true }
 application     = { workspace = true }
 adapters-auth   = { workspace = true }
+{% if storage and storage_s3 and storage_gcs %}
+adapters-storage = { workspace = true, features = ["s3", "gcs"] }
+{% elsif storage and storage_s3 %}
+adapters-storage = { workspace = true, features = ["s3"] }
+{% elsif storage and storage_gcs %}
+adapters-storage = { workspace = true, features = ["gcs"] }
+{% elsif storage %}
+adapters-storage = { workspace = true }
+{% endif %}
 presentation    = { workspace = true }
 {% if database == "sqlite" %}
 adapters-sqlite = { path = "../adapters/sqlite" }

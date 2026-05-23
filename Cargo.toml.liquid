@@ -6,6 +6,7 @@ members = [
     {% if database == "sqlite" %}"crates/adapters/sqlite",{% endif %}
     {% if database == "postgres" %}"crates/adapters/postgres",{% endif %}
     "crates/adapters/auth",
+    {% if storage %}"crates/adapters/storage",{% endif %}
     "crates/presentation",
     "crates/bootstrap",
     {% if worker %}"crates/worker",{% endif %}
@@ -16,6 +17,7 @@ resolver = "2"
 tokio         = { version = "1.0", features = ["macros", "rt-multi-thread", "net", "time", "sync"] }
 async-trait   = "0.1"
 futures       = "0.3"
+bytes         = "1.0"
 anyhow        = "1.0"
 thiserror     = "2.0"
 serde         = { version = "1.0", features = ["derive"] }
@@ -36,4 +38,5 @@ domain        = { path = "crates/domain" }
 application   = { path = "crates/application" }
 api-types     = { path = "crates/api-types" }
 adapters-auth = { path = "crates/adapters/auth" }
+{% if storage %}adapters-storage = { path = "crates/adapters/storage" }{% endif %}
 presentation  = { path = "crates/presentation" }

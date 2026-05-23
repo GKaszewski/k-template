@@ -10,7 +10,8 @@ path = "src/main.rs"
 [dependencies]
 domain          = { workspace = true }
 application     = { workspace = true }
-adapters-auth   = { workspace = true }
+adapters-auth    = { workspace = true }
+adapters-storage = { workspace = true }
 presentation    = { workspace = true }
 adapters-sqlite = { path = "../adapters/sqlite" }
 tokio           = { workspace = true }

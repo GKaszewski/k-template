@@ -1,6 +1,10 @@
 use std::sync::Arc;
 use application::use_cases::{GetProfile, LoginUser, RegisterUser};
+{% if storage %}
 use domain::ports::{StoragePort, TokenIssuer};
+{% else %}
+use domain::ports::TokenIssuer;
+{% endif %}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -8,9 +12,7 @@ pub struct AppState {
     pub login_uc: Arc<LoginUser>,
     pub get_profile_uc: Arc<GetProfile>,
     pub token_issuer: Arc<dyn TokenIssuer>,
-    /// Direct storage access for handlers. Use cases that need storage should receive
-    /// `Arc<dyn StoragePort>` in their own constructor rather than reading it from `AppState`.
-    pub storage: Arc<dyn StoragePort>,
+    {% if storage %}pub storage: Arc<dyn StoragePort>,{% endif %}
 }
 
 impl AppState {
@@ -19,8 +21,8 @@ impl AppState {
         login_uc: Arc<LoginUser>,
         get_profile_uc: Arc<GetProfile>,
         token_issuer: Arc<dyn TokenIssuer>,
-        storage: Arc<dyn StoragePort>,
+        {% if storage %}storage: Arc<dyn StoragePort>,{% endif %}
     ) -> Self {
-        Self { register_uc, login_uc, get_profile_uc, token_issuer, storage }
+        Self { register_uc, login_uc, get_profile_uc, token_issuer{% if storage %}, storage{% endif %} }
     }
 }

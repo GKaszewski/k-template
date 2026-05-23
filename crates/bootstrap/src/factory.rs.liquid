@@ -5,8 +5,15 @@ use axum::http::HeaderValue;
 use tower_http::{cors::{Any, CorsLayer}, trace::TraceLayer};
 
 use adapters_auth::{BcryptPasswordHasher, JwtTokenIssuer};
+{% if database == "sqlite" %}
 use adapters_sqlite::{connect, run_migrations, SqliteUserRepository};
+{% endif %}
+{% if database == "postgres" %}
+use adapters_postgres::{connect, run_migrations, PostgresUserRepository};
+{% endif %}
+{% if storage %}
 use adapters_storage::{ObjectStorageAdapter, StorageConfig, build_store};
+{% endif %}
 use application::use_cases::{GetProfile, LoginUser, RegisterUser};
 use presentation::{routes::app_router, state::AppState};
 
@@ -16,7 +23,12 @@ pub async fn build_app(config: &Config) -> Result<Router> {
     let pool = connect(&config.database_url).await?;
     run_migrations(&pool).await?;
 
+    {% if database == "sqlite" %}
     let user_repo = Arc::new(SqliteUserRepository::new(pool));
+    {% endif %}
+    {% if database == "postgres" %}
+    let user_repo = Arc::new(PostgresUserRepository::new(pool));
+    {% endif %}
     let hasher = Arc::new(BcryptPasswordHasher);
     let issuer = Arc::new(JwtTokenIssuer::new(&config.jwt_secret));
 
@@ -24,13 +36,15 @@ pub async fn build_app(config: &Config) -> Result<Router> {
     let login_uc = Arc::new(LoginUser::new(user_repo.clone(), hasher, issuer.clone()));
     let get_profile_uc = Arc::new(GetProfile::new(user_repo));
 
+    {% if storage %}
     let storage_cfg = StorageConfig::from_env()?;
     let store = build_store(&storage_cfg)?;
     // To inject storage into a use case, clone it into the constructor:
     // let my_uc = Arc::new(MyUseCase::new(repo, storage.clone()));
     let storage = Arc::new(ObjectStorageAdapter::new(store, &storage_cfg.prefix)?);
+    {% endif %}
 
-    let state = AppState::new(register_uc, login_uc, get_profile_uc, issuer, storage);
+    let state = AppState::new(register_uc, login_uc, get_profile_uc, issuer{% if storage %}, storage{% endif %});
 
     let cors = CorsLayer::new()
         .allow_origin(

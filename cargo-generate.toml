@@ -33,3 +33,27 @@ ignore = ["crates/worker"]
 
 [conditional.'!auth_oidc']
 ignore = ["crates/adapters/auth/src/oidc.rs"]
+
+[placeholders.storage]
+type = "bool"
+prompt = "Include object storage adapter (local/S3/GCS)?"
+default = false
+
+[placeholders.storage_s3]
+type = "bool"
+prompt = "Include S3/MinIO backend?"
+default = false
+if = "storage"
+
+[placeholders.storage_gcs]
+type = "bool"
+prompt = "Include GCS backend?"
+default = false
+if = "storage"
+
+[conditional.'!storage']
+ignore = [
+    "crates/adapters/storage",
+    "crates/domain/src/ports/storage.rs",
+    "crates/presentation/src/handlers/storage_example.rs",
+]
